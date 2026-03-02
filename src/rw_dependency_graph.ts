@@ -7,7 +7,7 @@ export class RWDependencyGraph {
     this.pathToRead = new Map();
   }
 
-  public lock = async (path: string, type: "read" | "write"): Promise<() => void> => {
+  public acquire = async (path: string, type: "read" | "write"): Promise<() => void> => {
     switch (type) {
       case "read": {
         const lastRead = this.pathToRead.get(path) ?? Promise.resolve();
