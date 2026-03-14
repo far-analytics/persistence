@@ -8,6 +8,7 @@
     "clean": "rm -rf ./dist/*",
     "clean:build": "npm run clean && npm run build",
     "start": "node --expose-gc .",
+    "test:memory": "node --expose-gc ./dist/memory.js",
     "monitor": "nodemon ."
   },
   "author": "FAR",

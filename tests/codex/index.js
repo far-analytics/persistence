@@ -81,6 +81,100 @@ const main = async () => {
     "read after queued write must wait for the write"
   );
 
+  // FIFO regression: a read that queues after a write must not overtake it.
+  const fifoPath = "file://fifo";
+  const fifoTimeline = [];
+  const markFifo = (name, phase) => {
+    fifoTimeline.push({ name, phase, t: performance.now() });
+  };
+
+  const fifoR1 = (async () => {
+    const release = await graph.acquire(fifoPath, "read");
+    markFifo("r1", "acquired");
+    await sleep(30);
+    graph.release(release);
+    markFifo("r1", "released");
+  })();
+
+  await sleep(5);
+
+  const fifoW1 = (async () => {
+    const release = await graph.acquire(fifoPath, "write");
+    markFifo("w1", "acquired");
+    await sleep(20);
+    graph.release(release);
+    markFifo("w1", "released");
+  })();
+
+  await sleep(5);
+
+  const fifoR2 = (async () => {
+    const release = await graph.acquire(fifoPath, "read");
+    markFifo("r2", "acquired");
+    graph.release(release);
+    markFifo("r2", "released");
+  })();
+
+  await Promise.all([fifoR1, fifoW1, fifoR2]);
+  const fifoTimeOf = (name, phase) => {
+    const hit = fifoTimeline.find((e) => e.name === name && e.phase === phase);
+    assert.ok(hit, `Missing fifo entry ${name}:${phase}`);
+    return hit.t;
+  };
+  assert.ok(
+    fifoTimeOf("r2", "acquired") >= fifoTimeOf("w1", "released"),
+    "fifo: read queued after write must acquire after the write releases"
+  );
+
+  // Snapshot-vs-tail regression: R2 must not overtake queued W1.
+  const queuePath = "file://queue";
+  const queueTimeline = [];
+  const markQueue = (name, phase) => {
+    queueTimeline.push({ name, phase, t: performance.now() });
+  };
+
+  let releaseR1;
+  const holdR1 = (async () => {
+    releaseR1 = await graph.acquire(queuePath, "read");
+    markQueue("r1", "acquired");
+    // Hold until we explicitly release below.
+  })();
+
+  await holdR1;
+  await sleep(5);
+
+  const queuedW1 = (async () => {
+    const release = await graph.acquire(queuePath, "write");
+    markQueue("w1", "acquired");
+    graph.release(release);
+    markQueue("w1", "released");
+  })();
+
+  await sleep(5);
+
+  const queuedR2 = (async () => {
+    const release = await graph.acquire(queuePath, "read");
+    markQueue("r2", "acquired");
+    graph.release(release);
+    markQueue("r2", "released");
+  })();
+
+  // Now release R1, allowing queued operations to proceed.
+  graph.release(releaseR1);
+  markQueue("r1", "released");
+
+  await Promise.all([queuedW1, queuedR2]);
+
+  const queueTimeOf = (name, phase) => {
+    const hit = queueTimeline.find((e) => e.name === name && e.phase === phase);
+    assert.ok(hit, `Missing queue entry ${name}:${phase}`);
+    return hit.t;
+  };
+  assert.ok(
+    queueTimeOf("r2", "acquired") >= queueTimeOf("w1", "released"),
+    "queue: read queued after write must not overtake the write"
+  );
+
   // If the cleanup logic works, both maps should be empty after all releases.
   await flush();
   assert.equal(graph.pathToRead.size, 0, "read map should be empty");
