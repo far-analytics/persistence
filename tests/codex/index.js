@@ -20,40 +20,40 @@ const main = async () => {
   };
 
   const r1 = (async () => {
-    const release = await graph.lock(path, "read");
+    const release = await graph.acquire(path, "read");
     mark("r1", "acquired");
     await sleep(60);
-    release();
+    graph.release(release);
     mark("r1", "released");
   })();
 
   await sleep(10);
 
   const r2 = (async () => {
-    const release = await graph.lock(path, "read");
+    const release = await graph.acquire(path, "read");
     mark("r2", "acquired");
     await sleep(60);
-    release();
+    graph.release(release);
     mark("r2", "released");
   })();
 
   await sleep(10);
 
   const w1 = (async () => {
-    const release = await graph.lock(path, "write");
+    const release = await graph.acquire(path, "write");
     mark("w1", "acquired");
     await sleep(30);
-    release();
+    graph.release(release);
     mark("w1", "released");
   })();
 
   await sleep(10);
 
   const r3 = (async () => {
-    const release = await graph.lock(path, "read");
+    const release = await graph.acquire(path, "read");
     mark("r3", "acquired");
     await sleep(10);
-    release();
+    graph.release(release);
     mark("r3", "released");
   })();
 
@@ -112,7 +112,7 @@ const main = async () => {
       ops.push(
         (async () => {
           await sleep(startDelay);
-          const release = await graph.lock(p, type);
+          const release = await graph.acquire(p, type);
 
           if (type === "read") {
             assert.equal(activeWrites.get(p), 0, "read acquired while write active");
@@ -131,7 +131,7 @@ const main = async () => {
             activeWrites.set(p, 0);
           }
 
-          release();
+          graph.release(release);
         })()
       );
     }
@@ -154,20 +154,20 @@ const main = async () => {
   const pathB = "file://iso-b";
 
   const wA = (async () => {
-    const release = await graph.lock(pathA, "write");
+    const release = await graph.acquire(pathA, "write");
     markIso("wA-acq");
     await sleep(40);
-    release();
+    graph.release(release);
     markIso("wA-rel");
   })();
 
   await sleep(5);
 
   const rB = (async () => {
-    const release = await graph.lock(pathB, "read");
+    const release = await graph.acquire(pathB, "read");
     markIso("rB-acq");
     await sleep(10);
-    release();
+    graph.release(release);
     markIso("rB-rel");
   })();
 
@@ -196,7 +196,7 @@ const main = async () => {
       soak.push(
         (async () => {
           await sleep(startDelay);
-          const release = await graph.lock(p, type);
+          const release = await graph.acquire(p, type);
 
           if (type === "read") {
             assert.equal(activeWrites.get(p), 0, "read acquired while write active");
@@ -215,7 +215,7 @@ const main = async () => {
             activeWrites.set(p, 0);
           }
 
-          release();
+          graph.release(release);
         })()
       );
     }
@@ -243,7 +243,7 @@ const main = async () => {
             lcg() < 0.08 ? 200 + Math.floor(lcg() * 200) : 2 + Math.floor(lcg() * 16);
 
           await sleep(startDelay);
-          const release = await graph.lock(p, type);
+          const release = await graph.acquire(p, type);
 
           if (type === "read") {
             assert.equal(activeWrites.get(p), 0, "read acquired while write active");
@@ -262,7 +262,7 @@ const main = async () => {
             activeWrites.set(p, 0);
           }
 
-          release();
+          graph.release(release);
         }
       })()
     );
@@ -284,10 +284,10 @@ const main = async () => {
 
   const earlyBurstReads = Array.from({ length: 40 }, (_, i) =>
     (async () => {
-      const release = await graph.lock(burstPath, "read");
+      const release = await graph.acquire(burstPath, "read");
       markBurst(`rE${i}-acq`);
       await sleep(15);
-      release();
+      graph.release(release);
       markBurst(`rE${i}-rel`);
     })()
   );
@@ -296,10 +296,10 @@ const main = async () => {
 
   const burstWrites = Array.from({ length: 12 }, (_, i) =>
     (async () => {
-      const release = await graph.lock(burstPath, "write");
+      const release = await graph.acquire(burstPath, "write");
       markBurst(`w${i}-acq`);
       await sleep(10);
-      release();
+      graph.release(release);
       markBurst(`w${i}-rel`);
     })()
   );
@@ -308,10 +308,10 @@ const main = async () => {
 
   const lateBurstReads = Array.from({ length: 40 }, (_, i) =>
     (async () => {
-      const release = await graph.lock(burstPath, "read");
+      const release = await graph.acquire(burstPath, "read");
       markBurst(`rL${i}-acq`);
       await sleep(5);
-      release();
+      graph.release(release);
       markBurst(`rL${i}-rel`);
     })()
   );
@@ -353,30 +353,30 @@ const main = async () => {
   const markPref = (label) => prefOrder.push(label);
 
   const w0 = (async () => {
-    const release = await graph.lock(prefPath, "write");
+    const release = await graph.acquire(prefPath, "write");
     markPref("w0-acq");
     await sleep(30);
-    release();
+    graph.release(release);
     markPref("w0-rel");
   })();
 
   await sleep(5);
 
   const prefR1 = (async () => {
-    const release = await graph.lock(prefPath, "read");
+    const release = await graph.acquire(prefPath, "read");
     markPref("r1-acq");
     await sleep(10);
-    release();
+    graph.release(release);
     markPref("r1-rel");
   })();
 
   await sleep(5);
 
   const prefW1 = (async () => {
-    const release = await graph.lock(prefPath, "write");
+    const release = await graph.acquire(prefPath, "write");
     markPref("w1-acq");
     await sleep(10);
-    release();
+    graph.release(release);
     markPref("w1-rel");
   })();
 
@@ -398,10 +398,10 @@ const main = async () => {
 
   const earlyReads = Array.from({ length: 10 }, (_, i) =>
     (async () => {
-      const release = await graph.lock(path2, "read");
+      const release = await graph.acquire(path2, "read");
       markOrder(`r${i}-acq`);
       await sleep(20);
-      release();
+      graph.release(release);
       markOrder(`r${i}-rel`);
     })()
   );
@@ -409,10 +409,10 @@ const main = async () => {
   await sleep(5);
 
   const w = (async () => {
-    const release = await graph.lock(path2, "write");
+    const release = await graph.acquire(path2, "write");
     markOrder("w-acq");
     await sleep(10);
-    release();
+    graph.release(release);
     markOrder("w-rel");
   })();
 
@@ -420,10 +420,10 @@ const main = async () => {
 
   const lateReads = Array.from({ length: 5 }, (_, i) =>
     (async () => {
-      const release = await graph.lock(path2, "read");
+      const release = await graph.acquire(path2, "read");
       markOrder(`rL${i}-acq`);
       await sleep(5);
-      release();
+      graph.release(release);
       markOrder(`rL${i}-rel`);
     })()
   );
@@ -454,7 +454,7 @@ const main = async () => {
     hammerOps.push(
       (async () => {
         await sleep(startDelay);
-        const release = await graph.lock(hammerPath, type);
+        const release = await graph.acquire(hammerPath, type);
 
         if (type === "read") {
           assert.equal(hammerWrites.get(hammerPath), 0, "hammer read while write active");
@@ -473,7 +473,7 @@ const main = async () => {
           hammerWrites.set(hammerPath, 0);
         }
 
-        release();
+        graph.release(release);
       })()
     );
   }
@@ -487,17 +487,17 @@ const main = async () => {
 
   // Reentrancy deadlock test: read->write on same path should block.
   const deadlockPath = "file://deadlock";
-  const readRelease = await graph.lock(deadlockPath, "read");
+  const readRelease = await graph.acquire(deadlockPath, "read");
   let writeAcquired = false;
   const writeAttempt = (async () => {
-    const release = await graph.lock(deadlockPath, "write");
+    const release = await graph.acquire(deadlockPath, "write");
     writeAcquired = true;
-    release();
+    graph.release(release);
   })();
   const timeout = new Promise((r) => setTimeout(r, 50, "timeout"));
   const result = await Promise.race([writeAttempt.then(() => "acquired"), timeout]);
   assert.equal(result, "timeout", "write should not acquire while read is held");
-  readRelease();
+  graph.release(readRelease);
   await writeAttempt;
   assert.ok(writeAcquired, "write should acquire after read releases");
 
@@ -505,16 +505,16 @@ const main = async () => {
   const busyPath = "file://busy";
   const freePath = "file://free";
   const busyWrite = (async () => {
-    const release = await graph.lock(busyPath, "write");
+    const release = await graph.acquire(busyPath, "write");
     await sleep(80);
-    release();
+    graph.release(release);
   })();
   await sleep(5);
   const freeReadStart = performance.now();
   const freeRead = (async () => {
-    const release = await graph.lock(freePath, "read");
+    const release = await graph.acquire(freePath, "read");
     const acquiredAt = performance.now();
-    release();
+    graph.release(release);
     return acquiredAt;
   })();
   const acquiredAt = await freeRead;

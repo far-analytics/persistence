@@ -1,23 +1,23 @@
 export class RWDependencyGraph {
+  public uuidToRelease: Map<string, (value: void | PromiseLike<void>) => void>;
   public pathToWrite: Map<string, Promise<unknown>>;
   public pathToRead: Map<string, Promise<unknown>>;
 
   constructor() {
     this.pathToWrite = new Map();
     this.pathToRead = new Map();
+    this.uuidToRelease = new Map();
   }
 
-  public acquire = async (path: string, type: "read" | "write"): Promise<() => void> => {
+  public acquire = async (path: string, type: "read" | "write"): Promise<string> => {
     switch (type) {
       case "read": {
-        const lastRead = this.pathToRead.get(path) ?? Promise.resolve();
-        const lastWrite = this.pathToWrite.get(path) ?? Promise.resolve();
+        const lastRead = this.getLocks(path, "read"); //this.pathToRead.get(path) ?? Promise.resolve();
+        const lastWrite = this.getLocks(path, "write"); //this.pathToWrite.get(path) ?? Promise.resolve();
 
-        let release!: () => void;
+        const uuid = crypto.randomUUID();
         const currentRead = new Promise<void>((r) => {
-          release = () => {
-            r();
-          };
+          this.uuidToRelease.set(uuid, r);
         });
 
         // A subsequent write may not write until all prior reads have completed.
@@ -37,18 +37,16 @@ export class RWDependencyGraph {
 
         await lastWrite;
 
-        return release;
+        return uuid;
       }
       case "write": {
         // write
-        const lastRead = this.pathToRead.get(path) ?? Promise.resolve();
-        const lastWrite = this.pathToWrite.get(path) ?? Promise.resolve();
+        const lastRead = this.getLocks(path, "read"); // this.pathToRead.get(path) ?? Promise.resolve();
+        const lastWrite = this.getLocks(path, "write"); // this.pathToWrite.get(path) ?? Promise.resolve();
 
-        let release!: () => void;
+        const uuid = crypto.randomUUID();
         const currentWrite = new Promise<void>((r) => {
-          release = () => {
-            r();
-          };
+          this.uuidToRelease.set(uuid, r);
         });
 
         // A subsequent write may not write until all prior reads and writes have completed.
@@ -68,7 +66,41 @@ export class RWDependencyGraph {
 
         await Promise.all([lastRead, lastWrite]);
 
-        return release;
+        return uuid;
+      }
+      default: {
+        throw new Error(`Unexpected lock type: ${String(type)}`);
+      }
+    }
+  };
+
+  public release = (uuid: string): void => {
+    const r = this.uuidToRelease.get(uuid);
+    if (r) {
+      r();
+    }
+    this.uuidToRelease.delete(uuid);
+  };
+
+  protected getLocks = async (path: string, type: "read" | "write"): Promise<unknown[]> => {
+    switch (type) {
+      case "read": {
+        const locks: Promise<unknown>[] = [];
+        for (const [key, value] of this.pathToRead.entries()) {
+          if (key.startsWith(path) || path.startsWith(key)) {
+            locks.push(value);
+          }
+        }
+        return Promise.all(locks);
+      }
+      case "write": {
+        const locks: Promise<unknown>[] = [];
+        for (const [key, value] of this.pathToWrite.entries()) {
+          if (key.startsWith(path) || path.startsWith(key)) {
+            locks.push(value);
+          }
+        }
+        return Promise.all(locks);
       }
       default: {
         throw new Error(`Unexpected lock type: ${String(type)}`);

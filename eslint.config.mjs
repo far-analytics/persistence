@@ -23,6 +23,7 @@ export default defineConfig([
   {
     files: ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"],
     rules: {
+      "no-empty": ["off"],
       quotes: ["error", "double", { avoidEscape: true, allowTemplateLiterals: true }],
       "@stylistic/semi": ["error", "always"],
       "@typescript-eslint/no-require-imports": ["off"],
