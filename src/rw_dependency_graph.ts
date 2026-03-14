@@ -83,11 +83,31 @@ export class RWDependencyGraph {
   };
 
   protected getLocks = async (path: string, type: "read" | "write"): Promise<unknown[]> => {
+    const toSegments = (p: string): string[] => {
+      const trimmed = p.replace(/\/+$/u, "");
+      return trimmed === "" ? [""] : trimmed.split("/");
+    };
+    const isPrefix = (a: string, b: string): boolean => {
+      const aSeg = toSegments(a);
+      const bSeg = toSegments(b);
+      if (aSeg.length > bSeg.length) {
+        return false;
+      }
+      for (let i = 0; i < aSeg.length; i++) {
+        if (aSeg[i] !== bSeg[i]) {
+          return false;
+        }
+      }
+      return true;
+    };
+    const isRelated = (a: string, b: string): boolean => {
+      return isPrefix(a, b) || isPrefix(b, a);
+    };
     switch (type) {
       case "read": {
         const locks: Promise<unknown>[] = [];
         for (const [key, value] of this.pathToRead.entries()) {
-          if (key.startsWith(path) || path.startsWith(key)) {
+          if (isRelated(key, path)) {
             locks.push(value);
           }
         }
@@ -96,7 +116,7 @@ export class RWDependencyGraph {
       case "write": {
         const locks: Promise<unknown>[] = [];
         for (const [key, value] of this.pathToWrite.entries()) {
-          if (key.startsWith(path) || path.startsWith(key)) {
+          if (isRelated(key, path)) {
             locks.push(value);
           }
         }
