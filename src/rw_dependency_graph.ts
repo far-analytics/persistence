@@ -1,3 +1,5 @@
+import * as pth from "node:path";
+
 export class RWDependencyGraph {
   public uuidToRelease: Map<string, (value: void | PromiseLike<void>) => void>;
   public pathToWrite: Map<string, Promise<unknown>>;
@@ -10,6 +12,8 @@ export class RWDependencyGraph {
   }
 
   public acquire = async (path: string, type: "read" | "write"): Promise<string> => {
+    path = pth.resolve(path);
+
     switch (type) {
       case "read": {
         const lastRead = this.getLocks(path, "read"); //this.pathToRead.get(path) ?? Promise.resolve();
@@ -83,31 +87,11 @@ export class RWDependencyGraph {
   };
 
   protected getLocks = async (path: string, type: "read" | "write"): Promise<unknown[]> => {
-    const toSegments = (p: string): string[] => {
-      const trimmed = p.replace(/\/+$/u, "");
-      return trimmed === "" ? [""] : trimmed.split("/");
-    };
-    const isPrefix = (a: string, b: string): boolean => {
-      const aSeg = toSegments(a);
-      const bSeg = toSegments(b);
-      if (aSeg.length > bSeg.length) {
-        return false;
-      }
-      for (let i = 0; i < aSeg.length; i++) {
-        if (aSeg[i] !== bSeg[i]) {
-          return false;
-        }
-      }
-      return true;
-    };
-    const isRelated = (a: string, b: string): boolean => {
-      return isPrefix(a, b) || isPrefix(b, a);
-    };
     switch (type) {
       case "read": {
         const locks: Promise<unknown>[] = [];
         for (const [key, value] of this.pathToRead.entries()) {
-          if (isRelated(key, path)) {
+          if (path == key || key.startsWith(path == pth.sep ? path : path + pth.sep) || path.startsWith(key == pth.sep ? key : key + pth.sep)) {
             locks.push(value);
           }
         }
@@ -116,7 +100,7 @@ export class RWDependencyGraph {
       case "write": {
         const locks: Promise<unknown>[] = [];
         for (const [key, value] of this.pathToWrite.entries()) {
-          if (isRelated(key, path)) {
+          if (path == key || key.startsWith(path == pth.sep ? path : path + pth.sep) || path.startsWith(key == pth.sep ? key : key + pth.sep)) {
             locks.push(value);
           }
         }

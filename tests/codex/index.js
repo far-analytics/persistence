@@ -12,7 +12,7 @@ const flush = async () => {
 
 const main = async () => {
   const graph = new RWDependencyGraph();
-  const path = "file://alpha";
+  const path = "/tmp/persistence/alpha";
   const timeline = [];
 
   const mark = (name, phase) => {
@@ -82,7 +82,7 @@ const main = async () => {
   );
 
   // FIFO regression: a read that queues after a write must not overtake it.
-  const fifoPath = "file://fifo";
+  const fifoPath = "/tmp/persistence/fifo";
   const fifoTimeline = [];
   const markFifo = (name, phase) => {
     fifoTimeline.push({ name, phase, t: performance.now() });
@@ -127,7 +127,7 @@ const main = async () => {
   );
 
   // Snapshot-vs-tail regression: R2 must not overtake queued W1.
-  const queuePath = "file://queue";
+  const queuePath = "/tmp/persistence/queue";
   const queueTimeline = [];
   const markQueue = (name, phase) => {
     queueTimeline.push({ name, phase, t: performance.now() });
@@ -189,7 +189,7 @@ const main = async () => {
     };
   })();
 
-  const paths = ["file://a", "file://b", "file://c"];
+  const paths = ["/tmp/persistence/a", "/tmp/persistence/b", "/tmp/persistence/c"];
   const activeReads = new Map(paths.map((p) => [p, 0]));
   const activeWrites = new Map(paths.map((p) => [p, 0]));
 
@@ -244,8 +244,8 @@ const main = async () => {
   // Isolation test: different paths should not block each other.
   const iso = [];
   const markIso = (label) => iso.push({ label, t: performance.now() });
-  const pathA = "file://iso-a";
-  const pathB = "file://iso-b";
+  const pathA = "/tmp/persistence/iso-a";
+  const pathB = "/tmp/persistence/iso-b";
 
   const wA = (async () => {
     const release = await graph.acquire(pathA, "write");
@@ -372,7 +372,7 @@ const main = async () => {
   assert.equal(graph.pathToWrite.size, 0, "write map should be empty after chaos");
 
   // Burst test: many reads, then many writes, then many reads.
-  const burstPath = "file://burst";
+  const burstPath = "/tmp/persistence/burst";
   const burstOrder = [];
   const markBurst = (label) => burstOrder.push(label);
 
@@ -442,7 +442,7 @@ const main = async () => {
   // FIFO boundary test (reads and writes should respect arrival order).
   // Scenario: W0 holds, R1 queues, W1 queues. FIFO means R1 should acquire
   // before W1 once W0 releases.
-  const prefPath = "file://writer-pref";
+  const prefPath = "/tmp/persistence/writer-pref";
   const prefOrder = [];
   const markPref = (label) => prefOrder.push(label);
 
@@ -488,7 +488,7 @@ const main = async () => {
   // Adversarial ordering: many reads, then a write, then reads.
   const order = [];
   const markOrder = (label) => order.push(label);
-  const path2 = "file://order";
+  const path2 = "/tmp/persistence/order";
 
   const earlyReads = Array.from({ length: 10 }, (_, i) =>
     (async () => {
@@ -534,7 +534,7 @@ const main = async () => {
   }
 
   // Single-path hammer: extreme contention on one path.
-  const hammerPath = "file://hammer";
+  const hammerPath = "/tmp/persistence/hammer";
   const hammerReads = new Map([[hammerPath, 0]]);
   const hammerWrites = new Map([[hammerPath, 0]]);
   const hammerOps = [];
@@ -580,7 +580,7 @@ const main = async () => {
   assert.equal(graph.pathToWrite.size, 0, "write map should be empty after hammer");
 
   // Reentrancy deadlock test: read->write on same path should block.
-  const deadlockPath = "file://deadlock";
+  const deadlockPath = "/tmp/persistence/deadlock";
   const readRelease = await graph.acquire(deadlockPath, "read");
   let writeAcquired = false;
   const writeAttempt = (async () => {
@@ -596,8 +596,8 @@ const main = async () => {
   assert.ok(writeAcquired, "write should acquire after read releases");
 
   // Multi-path fairness: heavy contention on one path shouldn't block another.
-  const busyPath = "file://busy";
-  const freePath = "file://free";
+  const busyPath = "/tmp/persistence/busy";
+  const freePath = "/tmp/persistence/free";
   const busyWrite = (async () => {
     const release = await graph.acquire(busyPath, "write");
     await sleep(80);
