@@ -17,7 +17,7 @@ It is intentionally minimal: one lock manager, one client, one clear set of sema
 
 ## Usage
 
-### Setup
+**Setup**
 
 ```ts
 import { once } from "node:events";
@@ -27,33 +27,33 @@ const manager = new LockManager();
 const client = new Client({ manager, durable: true });
 ```
 
-### Write to a file
+**Write to a file**
 
 ```ts
 await client.write("/tmp/example.json", JSON.stringify({ message: "Hello, World!" }));
 ```
 
-### Read from a file
+**Read from a file**
 
 ```ts
 const data = await client.read("/tmp/example.json", "utf8");
 console.log(JSON.parse(data)); // { message: "Hello, World!" }
 ```
 
-### Collect directory contents
+**Collect directory contents**
 
 ```ts
 const entries = await client.collect("/tmp", { encoding: "utf8", withFileTypes: false });
 console.log(entries); // ['example.json']
 ```
 
-### Delete a file or directory
+**Delete a file or directory**
 
 ```ts
 await client.delete("/tmp/example.json");
 ```
 
-### Create a write stream and write to a file
+**Create a write stream and write to a file**
 
 ```ts
 const ws = await client.createWriteStream("/tmp/example.json");
@@ -62,7 +62,7 @@ ws.end();
 await once(ws, "finish");
 ```
 
-### Create a read stream and read from a file
+**Create a read stream and read from a file**
 
 ```ts
 const rs = await client.createReadStream("/tmp/example.json");
@@ -70,7 +70,11 @@ rs.pipe(process.stdout); // {"message":"Streaming Hello, World!"}
 await once(rs, "close");
 ```
 
+## Examples
 
+### _"Hello, World!"_
+
+Please see the [Usage](#usage) section above or the [_Hello, World!_](https://github.com/far-analytics/persistence/tree/main/examples/example) example for a working implementation.
 
 ## Locking model
 
@@ -197,8 +201,7 @@ _public_ **client.createWriteStream(path, options?)**
 
 Returns: `<Promise<fs.WriteStream>>`
 
-Creates an atomic write stream (temp file + rename) and holds a write lock for the stream lifetime. For the full option list, see the Node.js `fs.createWriteStream` documentation.
-Note: when `durable: true`, the stream is followed by a directory `fsync` after the rename.
+Creates an atomic write stream (temp file + rename) and holds a write lock for the stream lifetime. For the full option list, see the Node.js `fs.createWriteStream` documentation. When the `Client` is instantiated with `durable: true`, `flush` is forced to `true` regardless of the per‑call option.
 
 Notes:
 
@@ -218,8 +221,7 @@ _public_ **client.write(path, data, options?)**
 
 Returns: `<Promise<void>>`
 
-Writes a file using a temp file + rename. In durable mode, writes are flushed and directories are `fsync`'d. For the full option list, see the Node.js `fs.promises.writeFile` documentation.
-Note: when `durable: true`, `flush` is forced to `true` regardless of the per‑call option.
+Writes a file using a temp file + rename. In durable mode, writes are flushed and directories are `fsync`'d. For the full option list, see the Node.js `fs.promises.writeFile` documentation. When the `Client` is instantiated with `durable: true`, `flush` is forced to `true` regardless of the per‑call option.
 
 _public_ **client.delete(path, options?)**
 
@@ -311,7 +313,7 @@ npm test
 
 ## Versioning
 
-The Persistence package adheres to semantic versioning. Breaking changes to the public API will result in a turn of the major. Minor and patch changes will always be backward compatible.
+The Persistence package adheres to semantic versioning. Breaking changes to the public API will result in a bump of the major. Minor and patch changes will always be backward compatible.
 
 Excerpted from [Semantic Versioning 2.0.0](https://semver.org/):
 
