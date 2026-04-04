@@ -160,20 +160,35 @@ Reads a file. All paths must be absolute.
 _public_ **client.createReadStream(path, options?)**
 
 - path `<string>` An absolute path to a file.
-- options `<Parameters<typeof fs.createReadStream>[1]>` Optional `createReadStream` options.
+- options `<Object>` Optional `createReadStream` options.
+  - flags `<string>` File system flags. **Default:** `"r"`
+  - encoding `<string | null>` **Default:** `null`
+  - fd `<number | null>` Existing file descriptor.
+  - mode `<integer>` **Default:** `0o666`
+  - autoClose `<boolean>` **Default:** `true`
+  - start `<number>` Start offset.
+  - end `<number>` End offset (inclusive).
+  - highWaterMark `<number>` Read buffer size.
 
 Returns: `<Promise<fs.ReadStream>>`
 
-Creates a read stream and holds a read lock for the stream lifetime.
+Creates a read stream and holds a read lock for the stream lifetime. For the full option list, see the Node.js `fs.createReadStream` documentation.
 
 _public_ **client.createWriteStream(path, options?)**
 
 - path `<string>` An absolute path to a file.
-- options `<Parameters<typeof fs.createWriteStream>[1]>` Optional `createWriteStream` options.
+- options `<Object>` Optional `createWriteStream` options.
+  - flags `<string>` File system flags. **Default:** `"w"`
+  - encoding `<string>` **Default:** `"utf8"`
+  - fd `<number | null>` Existing file descriptor.
+  - mode `<integer>` **Default:** `0o666`
+  - autoClose `<boolean>` **Default:** `true`
+  - start `<number>` Start offset.
+  - highWaterMark `<number>` Write buffer size.
 
 Returns: `<Promise<fs.WriteStream>>`
 
-Creates an atomic write stream (temp file + rename) and holds a write lock for the stream lifetime.
+Creates an atomic write stream (temp file + rename) and holds a write lock for the stream lifetime. For the full option list, see the Node.js `fs.createWriteStream` documentation.
 
 Notes:
 
@@ -183,21 +198,31 @@ Notes:
 _public_ **client.write(path, data, options?)**
 
 - path `<string>` An absolute path to a file.
-- data `<Parameters<typeof fs.promises.writeFile>[1]>` Data to write.
-- options `<Parameters<typeof fs.promises.writeFile>[2]>` Optional `writeFile` options.
+- data `<string | Buffer | TypedArray | DataView | Iterable | AsyncIterable | Stream>` Data to write.
+- options `<Object | string>` Optional `writeFile` options.
+  - encoding `<string | null>` **Default:** `"utf8"`
+  - mode `<integer>` **Default:** `0o666`
+  - flag `<string>` **Default:** `"w"`
+  - flush `<boolean>` If `true`, flush data to disk after writing. **Default:** `false`
+  - signal `<AbortSignal>` Abort an in‑progress write.
 
 Returns: `<Promise<void>>`
 
-Writes a file using a temp file + rename. In durable mode, writes are flushed and directories are `fsync`'d.
+Writes a file using a temp file + rename. In durable mode, writes are flushed and directories are `fsync`'d. For the full option list, see the Node.js `fs.promises.writeFile` documentation.
 
 _public_ **client.delete(path, options?)**
 
 - path `<string>` An absolute path to a file or directory.
-- options `<Parameters<typeof fs.promises.rm>[1]>` Optional `rm` options.
+- options `<Object>` Optional `rm` options.
+  - recursive `<boolean>` **Default:** `false`
+  - force `<boolean>` **Default:** `false`
+  - maxRetries `<number>` **Default:** `0`
+  - retryDelay `<number>` **Default:** `100`
+  - signal `<AbortSignal>` Abort an in‑progress remove.
 
 Returns: `<Promise<void>>`
 
-Deletes a file or directory. In durable mode, the parent directory is `fsync`'d.
+Deletes a file or directory. In durable mode, the parent directory is `fsync`'d. For the full option list, see the Node.js `fs.promises.rm` documentation.
 
 ### The LockManager class
 
@@ -245,7 +270,7 @@ The root node of the internal lock graph.
 - locks `<Array<Promise<unknown>>>` Promises the lock acquisition must await.
 - node `<GraphNode>` The graph node for the path.
 
-## Test
+## Tests
 
 ### How to run the test
 
