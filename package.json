@@ -1,7 +1,7 @@
 {
   "name": "@far-analytics/persistence",
   "version": "0.0.1",
-  "description": "",
+  "description": "A persistent storage layer.",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
