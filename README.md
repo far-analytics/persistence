@@ -62,8 +62,8 @@ rs.pipe(process.stdout);
 ### Create a write stream
 
 ```ts
-const ws = await client.createWriteStream("/tmp/example2.json");
-ws.write(JSON.stringify({ message: "Streaming write" }));
+const ws = await client.createWriteStream("/tmp/example.json");
+ws.write(JSON.stringify({ message: "Streaming Hello, World!" }));
 ws.end();
 ```
 
