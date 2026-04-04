@@ -14,9 +14,15 @@ const manager = new LockManager();
 const client = new Client({ manager });
 const server = http.createServer();
 
-server.listen({ port: 8080, host: "127.0.0.1" });
+server.listen({ port: 0, host: "127.0.0.1" });
 server.on("error", console.error);
 await once(server, "listening");
+
+const address = server.address();
+if (!address || typeof address === "string") {
+  throw new Error("Expected TCP server address");
+}
+const PORT = address.port.toString();
 
 interface Deferred<T> {
   promise: Promise<T>;
@@ -256,7 +262,7 @@ await suite("HTTP server", async () => {
     const body1 = { data: data1 };
     const data2 = "57".repeat(5e6);
     const body2 = { data: data2 };
-    const url = "http://127.0.0.1:8080/data.json";
+    const url = `http://127.0.0.1:${PORT}/data.json`;
     await client.write(pth.join(WEB_ROOT, "data.json"), JSON.stringify(body1));
 
     const put1 = fetch(url, { method: "PUT", body: JSON.stringify(body1), headers: { "x-gate-id": "w1" } });
