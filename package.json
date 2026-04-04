@@ -38,6 +38,19 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.56.0"
   },
-  "keywords": [],
+  "keywords": [
+    "persistence",
+    "filesystem",
+    "fs",
+    "locking",
+    "rwlock",
+    "read-write-lock",
+    "concurrency",
+    "atomic",
+    "atomic-write",
+    "durability",
+    "fsync",
+    "nodejs"
+  ],
   "type": "commonjs"
 }
