@@ -74,6 +74,10 @@ ws.end();
 - Read/collect operations can overlap other reads on the same path or within the same ancestor/descendant subtree.
 - Write/delete operations are exclusive: a write on a path excludes all reads and writes on that path and any ancestor/descendant paths until the write is complete.
 
+## Scalability
+
+Persistence can scale across multiple clients as long as all operations route through a single authoritative `LockManager` (for example, a shared in-process instance or a single lock service accessed over RPC). If multiple independent `LockManager` instances are used, they do not coordinate and safety guarantees no longer hold.
+
 ## Durability
 
 When a client instance is instantiated with `{ durable: true }`, writes are flushed and parent directories are `fsync`’d to reduce the chance of data loss after a crash. Durability guarantees are best‑effort and depend on filesystem and OS behavior.
@@ -189,6 +193,7 @@ _public_ **client.createWriteStream(path, options?)**
 Returns: `<Promise<fs.WriteStream>>`
 
 Creates an atomic write stream (temp file + rename) and holds a write lock for the stream lifetime. For the full option list, see the Node.js `fs.createWriteStream` documentation.
+Note: when `durable: true`, the stream is followed by a directory `fsync` after the rename.
 
 Notes:
 
@@ -209,6 +214,7 @@ _public_ **client.write(path, data, options?)**
 Returns: `<Promise<void>>`
 
 Writes a file using a temp file + rename. In durable mode, writes are flushed and directories are `fsync`'d. For the full option list, see the Node.js `fs.promises.writeFile` documentation.
+Note: when `durable: true`, `flush` is forced to `true` regardless of the per‑call option.
 
 _public_ **client.delete(path, options?)**
 
