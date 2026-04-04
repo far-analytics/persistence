@@ -1,0 +1,28 @@
+{
+  "name": "example",
+  "version": "1.0.0",
+  "description": "Example",
+  "main": "./dist/main.js",
+  "scripts": {
+    "build": "tsc --build .",
+    "clean": "rm -rf ./dist/*",
+    "clean:build": "npm run clean && npm run build",
+    "lint": "npx eslint .",
+    "format": "npx prettier --write .",
+    "format:lint": "npm run format && npm run lint",
+    "start": "node --expose-gc ."
+  },
+  "author": "FAR",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.20.4"
+  },
+  "dependencies": {
+    "@far-analytics/persistence": "1.0.0"
+  },
+  "type": "module",
+  "devDependencies": {
+    "@types/node": "^20.19.39",
+    "typescript": "^5.1.6"
+  }
+}
