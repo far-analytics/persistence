@@ -1,4 +1,4 @@
-import { LockManager, Artifacts, GraphNode } from "./lock_manager.js";
+import { LockManager, LockManagerOptions, Artifacts, GraphNode } from "./lock_manager.js";
 import { Client } from "./client.js";
 
-export { Client, LockManager, Artifacts, GraphNode };
+export { Client, LockManager, LockManagerOptions, Artifacts, GraphNode };
