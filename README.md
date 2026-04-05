@@ -119,9 +119,9 @@ The _Persistence_ API provides a path-aware lock manager and a filesystem client
 #### new persistence.Client(options)
 
 - options `<ClientOptions>` Options passed to the `Client`.
-- manager `<LockManager>` The lock manager instance used to coordinate access.
-- tempSuffix `<string>` Optional temp filename suffix used during atomic-style writes. **Default: `"tmp"`**
-- durable `<boolean>` If `true`, use directory `fsync` and flush writes for stronger durability. **Default: `false`**
+  - manager `<LockManager>` The lock manager instance used to coordinate access.
+  - tempSuffix `<string>` Optional temp filename suffix used during atomic-style writes. **Default: `"tmp"`**
+  - durable `<boolean>` If `true`, use directory `fsync` and flush writes for stronger durability. **Default: `false`**
 
 Use a `Client` instance to read, write, list, and delete files with hierarchical locking.
 
@@ -243,6 +243,9 @@ Deletes a file or directory. In durable mode, the parent directory is `fsync`'d.
 ### The LockManager class
 
 #### new persistence.LockManager()
+
+- options `<LockManagerOptions>` Optional options passed to the `LockManager`.
+  - errorHandler `<typeof console.error>` **Default:** `console.error`.
 
 Creates a hierarchical lock manager. The lock manager enforces per-operation locking for reads, writes, collects, and deletes.
 
