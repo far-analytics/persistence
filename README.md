@@ -94,7 +94,7 @@ When a client instance is instantiated with `{ durable: true }`, writes are flus
 
 ## Atomicity
 
-- Atomic-style file replacement via temp file + rename for `write` and `createWriteStream`.
+Persistence supports atomic-style file replacement via temp file + rename for `write` and `createWriteStream`.
 
 ## Limitations
 
