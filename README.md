@@ -314,10 +314,6 @@ npm install && npm update
 npm test
 ```
 
-## License
-
-MIT
-
 ## Support
 
 For feature requests or issues, please open an [issue](https://github.com/far-analytics/persistence/issues) or contact one of the authors.
