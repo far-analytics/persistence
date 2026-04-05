@@ -13,6 +13,9 @@ export interface ClientOptions {
   durable?: boolean;
 }
 
+type SafeReadStreamOptions = Omit<fs.ReadStreamOptions, "fd" | "autoClose">;
+type SafeWriteStreamOptions = Omit<fs.WriteStreamOptions, "fd" | "autoClose">;
+
 export class Client {
   protected manager: LockManager;
   protected tempSuffix: string;
@@ -158,9 +161,16 @@ export class Client {
     }
   }
 
+  public createReadStream(path: string, options?: SafeReadStreamOptions | BufferEncoding): Promise<fs.ReadStream>;
   public async createReadStream(path: string, options?: Parameters<typeof fs.createReadStream>[1]): Promise<fs.ReadStream> {
     if (!pth.isAbsolute(path)) {
       throw new Error("`path` must be absolute");
+    }
+    if (options && typeof options === "object" && options.fd != null) {
+      throw new Error("`options.fd` is not supported");
+    }
+    if (options && typeof options === "object" && options.autoClose === false) {
+      throw new Error("`options.autoClose` must not be false");
     }
     path = pth.resolve(path);
     const id = await this.manager.acquire(path, "read");
@@ -173,12 +183,19 @@ export class Client {
     return stream;
   }
 
+  public createWriteStream(path: string, options?: SafeWriteStreamOptions | BufferEncoding): Promise<fs.WriteStream>;
   public async createWriteStream(path: string, options?: Parameters<typeof fs.createWriteStream>[1]): Promise<fs.WriteStream> {
     if (!pth.isAbsolute(path)) {
       throw new Error("`path` must be absolute");
     }
     if (typeof options == "string") {
       options = { encoding: options, flush: this.durable };
+    }
+    if (options && typeof options === "object" && options.fd != null) {
+      throw new Error("`options.fd` is not supported");
+    }
+    if (options && typeof options === "object" && options.autoClose === false) {
+      throw new Error("`options.autoClose` must not be false");
     }
     path = pth.resolve(path);
     const dir = pth.dirname(path);
@@ -306,8 +323,11 @@ export class Client {
           throw err;
         }
         const fh = await fsp.open(dir, "r");
-        await fh.sync();
-        await fh.close();
+        try {
+          await fh.sync();
+        } finally {
+          await fh.close();
+        }
       } else {
         const dir = pth.dirname(path);
         await fsp.mkdir(dir, {
