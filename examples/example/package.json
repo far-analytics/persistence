@@ -18,7 +18,7 @@
     "node": ">=18.20.4"
   },
   "dependencies": {
-    "@far-analytics/persistence": "1.0.0"
+    "@far-analytics/persistence": "^1.0.0"
   },
   "type": "module",
   "devDependencies": {
