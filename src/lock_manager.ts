@@ -13,11 +13,19 @@ export interface GraphNode {
   readTail: Promise<unknown> | null;
 }
 
+export interface LockManagerOptions {
+  errorHandler?: typeof console.error;
+}
+
 export class LockManager {
   protected idToRelease: Map<number, (value: void | PromiseLike<void>) => void>;
   public root: GraphNode;
   protected id: number;
-  constructor() {
+  protected errorHandler: typeof console.error;
+
+  constructor({ errorHandler }: LockManagerOptions = {}) {
+    this.errorHandler = errorHandler ?? console.error;
+
     this.id = 0;
     this.idToRelease = new Map();
     this.root = { segment: "", parent: null, children: new Map(), writeTail: null, readTail: null };
@@ -47,7 +55,7 @@ export class LockManager {
                 this.prune(currentNode);
               }
             })
-            .catch(console.error);
+            .catch(this.errorHandler);
 
           await Promise.all(artifacts.locks);
 
@@ -71,7 +79,7 @@ export class LockManager {
                 this.prune(currentNode);
               }
             })
-            .catch(console.error);
+            .catch(this.errorHandler);
 
           await Promise.all(artifacts.locks);
 
