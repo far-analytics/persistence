@@ -176,16 +176,19 @@ _public_ **client.createReadStream(path, options?)**
 - options `<Object>` Optional `createReadStream` options.
   - flags `<string>` File system flags. **Default:** `"r"`
   - encoding `<string | null>` **Default:** `null`
-  - fd `<number | null>` Existing file descriptor.
   - mode `<integer>` **Default:** `0o666`
-  - autoClose `<boolean>` **Default:** `true`
   - start `<number>` Start offset.
   - end `<number>` End offset (inclusive).
   - highWaterMark `<number>` Read buffer size.
 
 Returns: `<Promise<fs.ReadStream>>`
 
-Creates a read stream and holds a read lock for the stream lifetime. For the full option list, see the Node.js `fs.createReadStream` documentation.
+Creates a read stream and holds a read lock for the stream lifetime. For the supported option list, see the Node.js `fs.createReadStream` documentation.
+
+Notes:
+
+- `fd` is not supported.
+- `autoClose` must not be `false`.
 
 _public_ **client.createWriteStream(path, options?)**
 
@@ -193,20 +196,20 @@ _public_ **client.createWriteStream(path, options?)**
 - options `<Object>` Optional `createWriteStream` options.
   - flags `<string>` File system flags. **Default:** `"w"`
   - encoding `<string>` **Default:** `"utf8"`
-  - fd `<number | null>` Existing file descriptor.
   - mode `<integer>` **Default:** `0o666`
-  - autoClose `<boolean>` **Default:** `true`
   - start `<number>` Start offset.
   - highWaterMark `<number>` Write buffer size.
 
 Returns: `<Promise<fs.WriteStream>>`
 
-Creates an atomic write stream (temp file + rename) and holds a write lock for the stream lifetime. For the full option list, see the Node.js `fs.createWriteStream` documentation. When the `Client` is instantiated with `durable: true`, `flush` is forced to `true` regardless of the per‑call option.
+Creates an atomic write stream (temp file + rename) and holds a write lock for the stream lifetime. For the supported option list, see the Node.js `fs.createWriteStream` documentation. When the `Client` is instantiated with `durable: true`, `flush` is forced to `true` regardless of the per‑call option.
 
 Notes:
 
-- The stream writes to a temp file in the target directory and renames on `close`.
+- The stream writes to a temp file in the target directory; after `finish`, the client attempts to rename it into place.
 - The lock is held for the entire stream lifetime, so long-running writes will block conflicting operations.
+- `fd` is not supported.
+- `autoClose` must not be `false`.
 
 _public_ **client.write(path, data, options?)**
 
