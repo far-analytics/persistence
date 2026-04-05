@@ -3,6 +3,7 @@ import * as fsp from "node:fs/promises";
 import * as fs from "node:fs";
 import * as pth from "node:path";
 import * as crypto from "node:crypto";
+import { once } from "node:events";
 import { LockManager } from "./lock_manager.js";
 import { Abortable } from "node:events";
 
@@ -176,20 +177,13 @@ export class Client {
     if (!pth.isAbsolute(path)) {
       throw new Error("`path` must be absolute");
     }
+    if (typeof options == "string") {
+      options = { encoding: options, flush: this.durable };
+    }
     path = pth.resolve(path);
     const dir = pth.dirname(path);
-    const tempFile = `.${this.tempSuffix}.${crypto.randomUUID()}`;
-    const tempPath = pth.join(dir, tempFile);
 
     const id = await this.manager.acquire(path, "write");
-    let released = false;
-    const releaseOnce = () => {
-      if (!released) {
-        released = true;
-        this.manager.release(id);
-      }
-    };
-
     try {
       if (this.durable) {
         const parsed = pth.parse(path);
@@ -218,49 +212,36 @@ export class Client {
         await fsp.mkdir(dir, { recursive: true });
       }
 
-      const stream = fs.createWriteStream(tempPath, options);
+      const tempFile = `.${this.tempSuffix}.${crypto.randomUUID()}`;
+      const tempPath = pth.join(dir, tempFile);
+      const stream = fs.createWriteStream(tempPath, options && typeof options == "object" && this.durable ? { ...options, ...{ flush: true } } : options);
 
-      const handleError = async () => {
-        try {
-          await fsp.rm(tempPath);
-        } finally {
-          releaseOnce();
-        }
-      };
-
-      const handleClose = async () => {
-        try {
-          await fsp.rename(tempPath, path);
-          if (this.durable) {
-            const fh = await fsp.open(dir, "r");
-            try {
-              await fh.sync();
-            } finally {
-              await fh.close();
+      once(stream, "finish")
+        .then(async () => {
+          try {
+            await fsp.rename(tempPath, path);
+            if (this.durable) {
+              const fh = await fsp.open(dir, "r");
+              try {
+                await fh.sync();
+              } finally {
+                await fh.close();
+              }
             }
+          } catch {
+            await fsp.rm(tempPath, { force: true });
           }
-        } catch (err) {
-          stream.destroy(err as Error);
-        } finally {
-          releaseOnce();
-        }
-      };
-
-      stream.once("error", () => {
-        void handleError();
-      });
-
-      stream.once("close", () => {
-        void handleClose();
-      });
-
+        })
+        .catch(async () => {
+          await fsp.rm(tempPath, { force: true });
+        })
+        .finally(() => {
+          this.manager.release(id);
+        });
+      await once(stream, "ready");
       return stream;
     } catch (err) {
-      try {
-        await fsp.rm(tempPath);
-      } finally {
-        releaseOnce();
-      }
+      this.manager.release(id);
       throw err;
     }
   }
@@ -321,10 +302,7 @@ export class Client {
           }
           await fsp.rename(tempPath, path);
         } catch (err) {
-          try {
-            await fsp.rm(tempPath);
-          } finally {
-          }
+          await fsp.rm(tempPath, { force: true });
           throw err;
         }
         const fh = await fsp.open(dir, "r");
@@ -341,10 +319,7 @@ export class Client {
           await fsp.writeFile(tempPath, data, options);
           await fsp.rename(tempPath, path);
         } catch (err) {
-          try {
-            await fsp.rm(tempPath);
-          } finally {
-          }
+          await fsp.rm(tempPath, { force: true });
           throw err;
         }
       }
