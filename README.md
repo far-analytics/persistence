@@ -1,6 +1,6 @@
 # Persistence
 
-Persistence - a persistent storage layer.
+Persistence - a performant, durable filesystem storage layer.
 
 ## Introduction
 
