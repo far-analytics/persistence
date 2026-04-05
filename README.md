@@ -8,6 +8,7 @@ Persistence is a filesystem persistent storage layer. It provides hierarchical r
 
 ### Features
 
+- **A _zero-dependency_ filesystem storage layer.**
 - Coordinates reads and writes with hierarchical path locks.
 - Provides atomic-style file replacement (temp file + rename).
 - Flushes directory metadata for stronger durability on write/delete when durability is enabled.
