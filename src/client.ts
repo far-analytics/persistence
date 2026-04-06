@@ -248,7 +248,7 @@ export class Client {
                 await fh.close();
               }
             }
-          } catch(err) {
+          } catch (err) {
             this.errorHandler(err);
             await fsp.rm(tempPath, { force: true });
           }
