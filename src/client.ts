@@ -11,6 +11,7 @@ export interface ClientOptions {
   manager: LockManager;
   tempSuffix?: string;
   durable?: boolean;
+  errorHandler?: typeof console.error;
 }
 
 type SafeReadStreamOptions = Omit<fs.ReadStreamOptions, "fd" | "autoClose">;
@@ -19,11 +20,13 @@ type SafeWriteStreamOptions = Omit<fs.WriteStreamOptions, "fd" | "autoClose">;
 export class Client {
   protected manager: LockManager;
   protected tempSuffix: string;
+  protected errorHandler: typeof console.error;
   public durable: boolean;
-  constructor({ manager, tempSuffix, durable }: ClientOptions) {
+  constructor({ manager, tempSuffix, durable, errorHandler }: ClientOptions) {
     this.manager = manager;
     this.tempSuffix = tempSuffix ?? "tmp";
     this.durable = durable ?? false;
+    this.errorHandler = errorHandler ?? console.error;
   }
 
   public collect(
@@ -245,11 +248,13 @@ export class Client {
                 await fh.close();
               }
             }
-          } catch {
+          } catch(err) {
+            this.errorHandler(err);
             await fsp.rm(tempPath, { force: true });
           }
         })
-        .catch(async () => {
+        .catch(async (reason: unknown) => {
+          this.errorHandler(reason);
           await fsp.rm(tempPath, { force: true });
         })
         .finally(() => {
