@@ -321,7 +321,7 @@ await suite("Client (durable)", async () => {
 
 await suite("Client (streams)", async () => {
   await test("createWriteStream is atomic and holds the lock.", async () => {
-    const streamClient = new Client({ manager: new LockManager(), errorHandler: () => {} });
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), errorHandler: () => {} });
     const dir = pth.join(WEB_ROOT, "streams");
     const file = pth.join(dir, "data.json");
     await fsp.mkdir(dir, { recursive: true });
@@ -346,7 +346,7 @@ await suite("Client (streams)", async () => {
   });
 
   await test("createReadStream reads full content.", async () => {
-    const streamClient = new Client({ manager: new LockManager(), errorHandler: () => {} });
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), errorHandler: () => {} });
     const dir = pth.join(WEB_ROOT, "streams");
     const file = pth.join(dir, "read.json");
     await fsp.mkdir(dir, { recursive: true });
@@ -363,13 +363,13 @@ await suite("Client (streams)", async () => {
   });
 
   await test("createReadStream rejects unsupported stream options.", async () => {
-    const streamClient = new Client({ manager: new LockManager(), errorHandler: () => {} });
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), errorHandler: () => {} });
     await assert.rejects(streamClient.createReadStream("/tmp/read.json", { autoClose: false } as Parameters<typeof fs.createReadStream>[1]), /autoClose/);
     await assert.rejects(streamClient.createReadStream("/tmp/read.json", { fd: 1 } as Parameters<typeof fs.createReadStream>[1]), /options\.fd/);
   });
 
   await test("createWriteStream early close preserves existing data and releases the lock.", async () => {
-    const streamClient = new Client({ manager: new LockManager(), errorHandler: () => {} });
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), errorHandler: () => {} });
     const dir = pth.join(WEB_ROOT, "streams");
     const file = pth.join(dir, "error.json");
     await fsp.mkdir(dir, { recursive: true });
@@ -389,7 +389,7 @@ await suite("Client (streams)", async () => {
   });
 
   await test("durable createWriteStream accepts string options.", async () => {
-    const streamClient = new Client({ manager: new LockManager(), durable: true, errorHandler: () => {} });
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true, errorHandler: () => {} });
     const dir = pth.join(WEB_ROOT, "streams", "durable");
     const file = pth.join(dir, "data.txt");
     await fsp.mkdir(dir, { recursive: true });
@@ -404,7 +404,7 @@ await suite("Client (streams)", async () => {
   });
 
   await test("createWriteStream rejects unsupported stream options.", async () => {
-    const streamClient = new Client({ manager: new LockManager(), errorHandler: () => {} });
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), errorHandler: () => {} });
     await assert.rejects(streamClient.createWriteStream("/tmp/write.json", { autoClose: false } as Parameters<typeof fs.createWriteStream>[1]), /autoClose/);
     await assert.rejects(streamClient.createWriteStream("/tmp/write.json", { fd: 1 } as Parameters<typeof fs.createWriteStream>[1]), /options\.fd/);
   });
