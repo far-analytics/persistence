@@ -123,6 +123,7 @@ The _Persistence_ API provides a path-aware lock manager and a filesystem client
   - manager `<LockManager>` The lock manager instance used to coordinate access.
   - tempSuffix `<string>` Optional temp filename suffix used during atomic-style writes. **Default: `"tmp"`**
   - durable `<boolean>` If `true`, use directory `fsync` and flush writes for stronger durability. **Default: `false`**
+  - errorHandler `<typeof console.error>` Optional error handler used for internal async stream errors. **Default:** `console.error`
 
 Use a `Client` instance to read, write, list, and delete files with hierarchical locking.
 
