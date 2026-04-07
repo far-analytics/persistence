@@ -84,9 +84,9 @@ Please see the [Usage](#usage) section above or the [_Hello, World!_](https://gi
 - Read/collect operations can overlap other reads on the same path or within the same ancestor/descendant subtree.
 - Write/delete operations are exclusive: a write on a path excludes all reads and writes on that path and any ancestor/descendant paths until the write is complete.
 
-## Scalability
+## Horizontal scaling
 
-Persistence can scale across multiple clients as long as all operations route through a single authoritative `LockManager` (for example, a shared in-process instance or a single lock service accessed over RPC).
+Persistence supports horizontal scaling across multiple clients, as long as all operations route through a single authoritative `LockManager` (for example, a shared in-process instance or a single lock service accessed over RPC).
 
 ## Durability
 
