@@ -86,7 +86,7 @@ Please see the [Usage](#usage) section above or the [_Hello, World!_](https://gi
 
 ## Scalability
 
-Persistence can scale across multiple clients as long as all operations route through a single authoritative `LockManager` (for example, a shared in-process instance or a single lock service accessed over RPC). If multiple independent `LockManager` instances are used, they do not coordinate and safety guarantees no longer hold.
+Persistence can scale across multiple clients as long as all operations route through a single authoritative `LockManager` (for example, a shared in-process instance or a single lock service accessed over RPC).
 
 ## Durability
 
