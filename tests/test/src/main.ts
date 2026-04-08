@@ -4,7 +4,7 @@ import * as pth from "node:path";
 import * as fsp from "node:fs/promises";
 import { once } from "node:events";
 import { finished } from "node:stream/promises";
-import { Client, LockManager } from "persistence";
+import { Client, LockManager } from "@far-analytics/persistence";
 import { StreamBuffer } from "./stream_buffer.js";
 import { test, after, before, suite } from "node:test";
 import * as assert from "node:assert";

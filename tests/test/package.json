@@ -22,7 +22,7 @@
     "node": ">=18.20.4"
   },
   "dependencies": {
-    "persistence": "file:../.."
+    "@far-analytics/persistence": "file:../.."
   },
   "type": "module",
   "devDependencies": {
