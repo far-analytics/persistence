@@ -69,7 +69,7 @@ cd persistence/examples/example
 #### Install the example dependencies.
 
 ```bash
-npm install && npm update
+npm install
 ```
 
 #### Build the application.
