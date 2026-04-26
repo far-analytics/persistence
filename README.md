@@ -90,11 +90,11 @@ Persistence supports horizontal scaling across multiple clients, as long as all 
 
 ## Durability
 
-When a client instance is instantiated with `{ durable: true }`, `write()` flushes file data before rename, `createWriteStream()` syncs the committed file and then `fsync`'s the parent directory, and write/delete operations `fsync` parent directories to reduce the chance of data loss after a crash. Durability guarantees are best‑effort and depend on filesystem and OS behavior.
+When a client instance is instantiated with `{ durable: true }`, `client.write` and `client.createWriteStream` flush temp file data before rename and then `fsync`s the parent directory. `client.delete` operations `fsync` the parent directory. Durability guarantees are best‑effort and depend on filesystem and OS behavior.
 
 Important semantic note:
 
-In durable mode, some operations perform a filesystem mutation first and then execute a final durability step such as `fsync` on the parent directory. If that final durability step fails, the operation rejects even though the mutation may already be visible on disk. In particular, a durable `write()` or `createWriteStream()` may have already renamed the new file into place before rejecting, and a durable `delete()` may already have removed the target before rejecting. Callers must not interpret every durable-mode rejection as "no change was applied". A rejection can also mean "the mutation was applied, but final durability confirmation failed".
+In durable mode, some operations perform a filesystem mutation first and then execute a final durability step such as `fsync` on the parent directory. If that final durability step fails, the operation rejects even though the mutation may already be visible on disk. In particular, a durable `client.write` or `client.createWriteStream` may have already renamed the new file into place before rejecting, and a durable `client.delete` may already have removed the target before rejecting. Callers must not interpret every durable-mode rejection as "no change was applied". A rejection can also mean "the mutation was applied, but final durability confirmation failed".
 
 ## Atomicity
 
@@ -124,7 +124,7 @@ The _Persistence_ API provides a path-aware lock manager and a filesystem client
 
 - options `<ClientOptions>` Options passed to the `Client`.
   - manager `<LockManager>` The lock manager instance used to coordinate access.
-  - durable `<boolean>` If `true`, use stronger durability behavior for filesystem mutations: `write()` flushes the temp file before rename, `createWriteStream()` syncs the committed file and then `fsync`'s the parent directory, and write/delete operations `fsync` the parent directory. **Default: `false`**
+  - durable `<boolean>` If `true`, use stronger durability behavior for filesystem mutations: `client.write` and `client.createWriteStream` flush the temp file before rename and then `fsync` the parent directory. `client.delete` operations `fsync` the parent directory. **Default: `false`**
 
 Use a `Client` instance to read, write, list, and delete files with hierarchical locking.
 
@@ -201,7 +201,7 @@ _public_ **client.write(path, data, options?)**
 
 Returns: `<Promise<void>>`
 
-Writes a file using a temp file + rename. In durable mode, `write()` flushes the temp file before rename and `fsync`'s the parent directory after rename.
+Writes a file using a temp file + rename. In durable mode, `client.write` flushes the temp file before rename and `fsync`s the parent directory after rename.
 
 In durable mode, a rejection does not always mean the old file is still in place. If the post-rename directory `fsync` fails, the promise rejects even though the rename may already have committed the new file at the target path.
 
@@ -226,7 +226,7 @@ Notes:
 - On success, `finish` means the write has been committed.
 - In durable mode, the parent directory is `fsync`'d after rename.
 - If that post-rename `fsync` fails in durable mode, the stream rejects even though the target path may already contain the new data.
-- The lock is held for the entire stream lifetime, so long-running writes will block conflicting operations.
+- The lock is held for the entire stream lifetime, so long-running writes will block **conflicting** operations.
 
 _public_ **client.delete(path, options?)**
 
