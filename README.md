@@ -4,7 +4,7 @@ Persistence - a performant, durable filesystem storage layer.
 
 ## Introduction
 
-Persistence is a filesystem persistent storage layer. It provides hierarchical read/write locking, durability, and atomic‑style writes. You can use Persistence as a drop‑in library to safely coordinate reads and writes to the filesystem. Reads on the same file are concurrent; however, reads are partitioned by writes and writes are processed in order of arrival (FIFO).
+Persistence is a filesystem persistent storage layer. It provides hierarchical read/write locking, durability, and atomic‑style writes. You can use Persistence as a small library to safely coordinate reads and writes to the filesystem. Reads on the same file are concurrent; however, reads are partitioned by writes and conflicting writes are processed in order of arrival (FIFO).
 
 ### Features
 
@@ -92,6 +92,10 @@ Persistence supports horizontal scaling across multiple clients, as long as all 
 
 When a client instance is instantiated with `{ durable: true }`, `write()` flushes file data before rename and write/delete operations `fsync` parent directories to reduce the chance of data loss after a crash. Durability guarantees are best‑effort and depend on filesystem and OS behavior.
 
+Important semantic note:
+
+In durable mode, some operations perform a filesystem mutation first and then execute a final durability step such as `fsync` on the parent directory. If that final durability step fails, the operation rejects even though the mutation may already be visible on disk. In particular, a durable `write()` or `createWriteStream()` may have already renamed the new file into place before rejecting, and a durable `delete()` may already have removed the target before rejecting. Callers must not interpret every durable-mode rejection as "no change was applied". A rejection can also mean "the mutation was applied, but final durability confirmation failed".
+
 ## Atomicity
 
 Persistence supports atomic-style file replacement via temp file + rename for `write` and `createWriteStream`.
@@ -120,7 +124,7 @@ The _Persistence_ API provides a path-aware lock manager and a filesystem client
 
 - options `<ClientOptions>` Options passed to the `Client`.
   - manager `<LockManager>` The lock manager instance used to coordinate access.
-  - durable `<boolean>` If `true`, use stronger durability behavior for filesystem mutations: `write()` flushes the temp file before rename, and write/delete operations `fsync` the parent directory. **Default: `false`**
+  - durable `<boolean>` If `true`, use stronger durability behavior for filesystem mutations: `write()` flushes the temp file before rename, `createWriteStream()` syncs the committed file and then `fsync`'s the parent directory, and write/delete operations `fsync` the parent directory. **Default: `false`**
 
 Use a `Client` instance to read, write, list, and delete files with hierarchical locking.
 
@@ -185,10 +189,26 @@ Returns: `<Promise<fs.ReadStream>>`
 
 Creates a read stream and holds a read lock for the stream lifetime. Persistence supports the subset of `fs.createReadStream` options listed above.
 
+_public_ **client.write(path, data, options?)**
+
+- path `<string>` An absolute path to a file.
+- data `<string | Buffer | TypedArray | DataView | Iterable | AsyncIterable | Stream>` Data to write.
+- options `<Object | BufferEncoding>` Optional `writeFile` options.
+  - encoding `<string | null>` **Default:** `"utf8"`
+  - mode `<integer>` **Default:** `0o666`
+  - flag `<string>` **Default:** `"w"`
+  - signal `<AbortSignal>` Abort an in‑progress write.
+
+Returns: `<Promise<void>>`
+
+Writes a file using a temp file + rename. In durable mode, `write()` flushes the temp file before rename and `fsync`'s the parent directory after rename.
+
+In durable mode, a rejection does not always mean the old file is still in place. If the post-rename directory `fsync` fails, the promise rejects even though the rename may already have committed the new file at the target path.
+
 _public_ **client.createWriteStream(path, options?)**
 
 - path `<string>` An absolute path to a file.
-- options `<Object | string>` Optional write stream options.
+- options `<Object | BufferEncoding>` Optional write stream options.
   - flags `<string>` File system flags. **Default:** `"w"`
   - encoding `<string>` **Default:** `"utf8"`
   - mode `<integer>` **Default:** `0o666`
@@ -205,22 +225,8 @@ Notes:
 - The stream writes to a temp file in the target directory and renames it into place before `finish` is emitted.
 - On success, `finish` means the write has been committed.
 - In durable mode, the parent directory is `fsync`'d after rename.
+- If that post-rename `fsync` fails in durable mode, the stream rejects even though the target path may already contain the new data.
 - The lock is held for the entire stream lifetime, so long-running writes will block conflicting operations.
-
-_public_ **client.write(path, data, options?)**
-
-- path `<string>` An absolute path to a file.
-- data `<string | Buffer | TypedArray | DataView | Iterable | AsyncIterable | Stream>` Data to write.
-- options `<Object | string>` Optional `writeFile` options.
-  - encoding `<string | null>` **Default:** `"utf8"`
-  - mode `<integer>` **Default:** `0o666`
-  - flag `<string>` **Default:** `"w"`
-  - flush `<boolean>` If `true`, flush data to disk after writing. **Default:** `false`
-  - signal `<AbortSignal>` Abort an in‑progress write.
-
-Returns: `<Promise<void>>`
-
-Writes a file using a temp file + rename. In durable mode, `write()` flushes the temp file before rename and `fsync`'s the parent directory after rename. For the full option list, see the Node.js `fs.promises.writeFile` documentation. When the `Client` is instantiated with `durable: true`, `flush` is forced to `true` regardless of the per‑call option.
 
 _public_ **client.delete(path, options?)**
 
@@ -235,6 +241,8 @@ _public_ **client.delete(path, options?)**
 Returns: `<Promise<void>>`
 
 Deletes a file or directory. In durable mode, the parent directory is `fsync`'d. For the full option list, see the Node.js `fs.promises.rm` documentation.
+
+In durable mode, a rejection does not always mean the target still exists. If removal succeeds but the subsequent parent-directory `fsync` fails, the promise rejects even though the file or directory may already be gone.
 
 ### The LockManager class
 
