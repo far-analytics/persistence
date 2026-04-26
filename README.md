@@ -4,7 +4,7 @@ Persistence - a performant, durable filesystem storage layer.
 
 ## Introduction
 
-Persistence is a filesystem persistent storage layer. It provides hierarchical read/write locking, durability, and atomic‑style writes. You can use Persistence as a small library to safely coordinate reads and writes to the filesystem. Reads on the same file are concurrent; however, reads are partitioned by writes and conflicting writes are processed in order of arrival (FIFO).
+Persistence is a filesystem-backed persistence layer. It provides hierarchical read/write locking, durability, and atomic‑style writes. You can use Persistence as a small library to safely coordinate reads and writes to the filesystem. Reads on the same file are concurrent; however, reads are partitioned by writes and conflicting writes are processed in order of arrival (FIFO).
 
 ### Features
 
