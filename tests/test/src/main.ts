@@ -371,6 +371,28 @@ await suite("Client (write)", async () => {
     assert.strictEqual(data, "ok");
   });
 
+  await test("durable write reports directory sync failure after rename and releases the lock.", async () => {
+    const writeClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
+    const dir = pth.join(WEB_ROOT, "durable-write-sync-error");
+    const path = pth.join(dir, "target.json");
+    await fsp.mkdir(dir, { recursive: true });
+    await writeClient.write(path, JSON.stringify({ v: 1 }));
+
+    await withFailingSyncOnOpen(dir, new Error("Injected directory sync failure"), async () => {
+      await assert.rejects(
+        writeClient.write(path, JSON.stringify({ v: 2 }), "utf8"),
+        /Injected directory sync failure/
+      );
+    });
+
+    const readData = await writeClient.read(path, "utf8");
+    assert.strictEqual(readData, JSON.stringify({ v: 2 }));
+
+    await writeClient.write(path, JSON.stringify({ v: 3 }));
+    const nextData = await writeClient.read(path, "utf8");
+    assert.strictEqual(nextData, JSON.stringify({ v: 3 }));
+  });
+
   await test("durable write preserves the existing target and releases the lock when commit fails.", async () => {
     const writeClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
     const dir = pth.join(WEB_ROOT, "durable-write");
