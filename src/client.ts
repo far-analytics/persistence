@@ -163,26 +163,30 @@ export class Client {
     }
     path = pth.resolve(path);
     const id = await this.manager.acquire(path, "read");
-    options =
-      typeof options == "string"
-        ? { encoding: options }
-        : {
-            flags: options?.flags,
-            encoding: options?.encoding,
-            mode: options?.mode,
-            emitClose: options?.emitClose,
-            start: options?.start,
-            signal: options?.signal,
-            highWaterMark: options?.highWaterMark,
-            end: options?.end,
-          };
-    const stream = fs.createReadStream(path, options);
-    const releaseOnce = () => {
+    try {
+      options =
+        typeof options == "string"
+          ? { encoding: options }
+          : {
+              flags: options?.flags,
+              encoding: options?.encoding,
+              mode: options?.mode,
+              start: options?.start,
+              signal: options?.signal,
+              highWaterMark: options?.highWaterMark,
+              end: options?.end,
+            };
+      const stream = fs.createReadStream(path, options);
+      const releaseOnce = () => {
+        this.manager.release(id);
+      };
+      stream.once("close", releaseOnce);
+      stream.once("error", releaseOnce);
+      return stream;
+    } catch (err) {
       this.manager.release(id);
-    };
-    stream.once("close", releaseOnce);
-    stream.once("error", releaseOnce);
-    return stream;
+      throw err;
+    }
   }
 
   public async write(path: string, data: Parameters<typeof fsp.writeFile>[1], options?: Parameters<typeof fsp.writeFile>[2]): ReturnType<typeof fsp.writeFile> {
