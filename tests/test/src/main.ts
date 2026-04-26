@@ -507,10 +507,7 @@ await suite("Client (streams)", async () => {
     await fsp.mkdir(dir, { recursive: true });
     await streamClient.write(file, JSON.stringify({ ok: true }));
 
-    const rs = await streamClient.createReadStream(
-      file,
-      { encoding: "utf8", autoClose: false, fd: 1 } as unknown as Parameters<typeof fs.createReadStream>[1]
-    );
+    const rs = await streamClient.createReadStream(file, { encoding: "utf8", autoClose: false, fd: 1 } as unknown as Parameters<typeof fs.createReadStream>[1]);
     const chunks: string[] = [];
     rs.on("data", (chunk) => {
       chunks.push(String(chunk));
@@ -673,10 +670,7 @@ await suite("Client (streams)", async () => {
     const file = pth.join(dir, "write-options.json");
     await fsp.mkdir(dir, { recursive: true });
 
-    const ws = await streamClient.createWriteStream(
-      file,
-      { encoding: "utf8", autoClose: false, fd: 1 } as unknown as Parameters<typeof fs.createWriteStream>[1]
-    );
+    const ws = await streamClient.createWriteStream(file, { encoding: "utf8", autoClose: false, fd: 1 } as unknown as Parameters<typeof fs.createWriteStream>[1]);
     ws.end(JSON.stringify({ ok: true }));
     await finished(ws);
 
@@ -694,10 +688,7 @@ await suite("Client (streams)", async () => {
     const file = pth.join(dir, "data.json");
     await fsp.mkdir(dir, { recursive: true });
 
-    const ws = await streamClient.createWriteStream(
-      file,
-      { encoding: "utf8", autoClose: false, fd: 1 } as unknown as Parameters<typeof fs.createWriteStream>[1]
-    );
+    const ws = await streamClient.createWriteStream(file, { encoding: "utf8", autoClose: false, fd: 1 } as unknown as Parameters<typeof fs.createWriteStream>[1]);
     ws.end(JSON.stringify({ ok: true }));
     await finished(ws);
 
