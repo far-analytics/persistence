@@ -6,7 +6,7 @@ import * as crypto from "node:crypto";
 import { once } from "node:events";
 import { LockManager } from "./lock_manager.js";
 import { Abortable } from "node:events";
-import { WriteStreamOptions, ReadStreamOptions } from "./types.js";
+import { WriteStreamOptions, ReadStreamOptions, WriteFileOptions } from "./types.js";
 import { WriteStream } from "./write_stream.js";
 
 export interface ClientOptions {
@@ -88,7 +88,7 @@ export class Client {
     }
   }
 
-  public async delete(path: string, options?: Parameters<typeof fsp.rm>[1]): ReturnType<typeof fsp.rm> {
+  public async delete(path: string, options?: Parameters<typeof fsp.rm>[1]): Promise<void> {
     if (!pth.isAbsolute(path)) {
       throw new Error("`path` must be absolute");
     }
@@ -189,10 +189,11 @@ export class Client {
     }
   }
 
-  public async write(path: string, data: Parameters<typeof fsp.writeFile>[1], options?: Parameters<typeof fsp.writeFile>[2]): ReturnType<typeof fsp.writeFile> {
+  public async write(path: string, data: Parameters<typeof fsp.writeFile>[1], options?: WriteFileOptions | BufferEncoding): Promise<void> {
     if (!pth.isAbsolute(path)) {
       throw new Error("`path` must be absolute");
     }
+    const writeFileOptions = typeof options == "string" ? { encoding: options, flush: this.durable } : { ...options, ...{ flush: this.durable } };
     path = pth.resolve(path);
     const id = await this.manager.acquire(path, "write");
     try {
@@ -226,23 +227,7 @@ export class Client {
         const tempFile = `.${crypto.randomUUID()}`;
         const tempPath = pth.join(dir, tempFile);
         try {
-          if (typeof options === "string") {
-            await fsp.writeFile(tempPath, data, {
-              encoding: options,
-              flush: true,
-            });
-          } else if (options && typeof options === "object") {
-            await fsp.writeFile(tempPath, data, {
-              ...options,
-              ...{
-                flush: true,
-              },
-            });
-          } else {
-            await fsp.writeFile(tempPath, data, {
-              flush: true,
-            });
-          }
+          await fsp.writeFile(tempPath, data, writeFileOptions);
           await fsp.rename(tempPath, path);
         } catch (err) {
           await fsp.rm(tempPath, { force: true });
@@ -262,7 +247,7 @@ export class Client {
         const tempFile = `.${crypto.randomUUID()}`;
         const tempPath = pth.join(dir, tempFile);
         try {
-          await fsp.writeFile(tempPath, data, options);
+          await fsp.writeFile(tempPath, data, writeFileOptions);
           await fsp.rename(tempPath, path);
         } catch (err) {
           await fsp.rm(tempPath, { force: true });
