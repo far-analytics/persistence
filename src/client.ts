@@ -6,27 +6,20 @@ import * as crypto from "node:crypto";
 import { once } from "node:events";
 import { LockManager } from "./lock_manager.js";
 import { Abortable } from "node:events";
+import { WriteStreamOptions, ReadStreamOptions } from "./types.js";
+import { WriteStream } from "./write_stream.js";
 
 export interface ClientOptions {
   manager: LockManager;
-  tempSuffix?: string;
   durable?: boolean;
-  errorHandler?: typeof console.error;
 }
-
-type SafeReadStreamOptions = Omit<fs.ReadStreamOptions, "fd" | "autoClose">;
-type SafeWriteStreamOptions = Omit<fs.WriteStreamOptions, "fd" | "autoClose">;
 
 export class Client {
   protected manager: LockManager;
-  protected tempSuffix: string;
-  protected errorHandler: typeof console.error;
   public durable: boolean;
-  constructor({ manager, tempSuffix, durable, errorHandler }: ClientOptions) {
+  constructor({ manager, durable }: ClientOptions) {
     this.manager = manager;
-    this.tempSuffix = tempSuffix ?? "tmp";
     this.durable = durable ?? false;
-    this.errorHandler = errorHandler ?? console.error;
   }
 
   public collect(
@@ -164,19 +157,25 @@ export class Client {
     }
   }
 
-  public createReadStream(path: string, options?: SafeReadStreamOptions | BufferEncoding): Promise<fs.ReadStream>;
-  public async createReadStream(path: string, options?: Parameters<typeof fs.createReadStream>[1]): Promise<fs.ReadStream> {
+  public async createReadStream(path: string, options?: ReadStreamOptions | BufferEncoding): Promise<fs.ReadStream> {
     if (!pth.isAbsolute(path)) {
       throw new Error("`path` must be absolute");
     }
-    if (options && typeof options === "object" && options.fd != null) {
-      throw new Error("`options.fd` is not supported");
-    }
-    if (options && typeof options === "object" && options.autoClose === false) {
-      throw new Error("`options.autoClose` must not be false");
-    }
     path = pth.resolve(path);
     const id = await this.manager.acquire(path, "read");
+    options =
+      typeof options == "string"
+        ? { encoding: options }
+        : {
+            flags: options?.flags,
+            encoding: options?.encoding,
+            mode: options?.mode,
+            emitClose: options?.emitClose,
+            start: options?.start,
+            signal: options?.signal,
+            highWaterMark: options?.highWaterMark,
+            end: options?.end,
+          };
     const stream = fs.createReadStream(path, options);
     const releaseOnce = () => {
       this.manager.release(id);
@@ -184,88 +183,6 @@ export class Client {
     stream.once("close", releaseOnce);
     stream.once("error", releaseOnce);
     return stream;
-  }
-
-  public createWriteStream(path: string, options?: SafeWriteStreamOptions | BufferEncoding): Promise<fs.WriteStream>;
-  public async createWriteStream(path: string, options?: Parameters<typeof fs.createWriteStream>[1]): Promise<fs.WriteStream> {
-    if (!pth.isAbsolute(path)) {
-      throw new Error("`path` must be absolute");
-    }
-    if (typeof options == "string") {
-      options = { encoding: options, flush: this.durable };
-    }
-    if (options && typeof options === "object" && options.fd != null) {
-      throw new Error("`options.fd` is not supported");
-    }
-    if (options && typeof options === "object" && options.autoClose === false) {
-      throw new Error("`options.autoClose` must not be false");
-    }
-    path = pth.resolve(path);
-    const dir = pth.dirname(path);
-
-    const id = await this.manager.acquire(path, "write");
-    try {
-      if (this.durable) {
-        const parsed = pth.parse(path);
-        const root = parsed.root;
-        const segments = parsed.dir.slice(root.length).split(pth.sep).filter(Boolean);
-        let current = root;
-        let parent: string;
-        for (const segment of segments) {
-          parent = current;
-          current = pth.join(current, segment);
-          try {
-            await fsp.mkdir(current, { recursive: false });
-            const fh = await fsp.open(parent, "r");
-            try {
-              await fh.sync();
-            } finally {
-              await fh.close();
-            }
-          } catch (err) {
-            if (!(err instanceof Error && "code" in err && err.code == "EEXIST")) {
-              throw err;
-            }
-          }
-        }
-      } else {
-        await fsp.mkdir(dir, { recursive: true });
-      }
-
-      const tempFile = `.${this.tempSuffix}.${crypto.randomUUID()}`;
-      const tempPath = pth.join(dir, tempFile);
-      const stream = fs.createWriteStream(tempPath, options && typeof options == "object" && this.durable ? { ...options, ...{ flush: true } } : options);
-
-      once(stream, "finish")
-        .then(async () => {
-          try {
-            await fsp.rename(tempPath, path);
-            if (this.durable) {
-              const fh = await fsp.open(dir, "r");
-              try {
-                await fh.sync();
-              } finally {
-                await fh.close();
-              }
-            }
-          } catch (err) {
-            this.errorHandler(err);
-            await fsp.rm(tempPath, { force: true });
-          }
-        })
-        .catch(async (reason: unknown) => {
-          this.errorHandler(reason);
-          await fsp.rm(tempPath, { force: true });
-        })
-        .finally(() => {
-          this.manager.release(id);
-        });
-      await once(stream, "ready");
-      return stream;
-    } catch (err) {
-      this.manager.release(id);
-      throw err;
-    }
   }
 
   public async write(path: string, data: Parameters<typeof fsp.writeFile>[1], options?: Parameters<typeof fsp.writeFile>[2]): ReturnType<typeof fsp.writeFile> {
@@ -302,7 +219,7 @@ export class Client {
           }
         }
 
-        const tempFile = `.${this.tempSuffix}.${crypto.randomUUID()}`;
+        const tempFile = `.${crypto.randomUUID()}`;
         const tempPath = pth.join(dir, tempFile);
         try {
           if (typeof options === "string") {
@@ -338,7 +255,7 @@ export class Client {
         await fsp.mkdir(dir, {
           recursive: true,
         });
-        const tempFile = `.${this.tempSuffix}.${crypto.randomUUID()}`;
+        const tempFile = `.${crypto.randomUUID()}`;
         const tempPath = pth.join(dir, tempFile);
         try {
           await fsp.writeFile(tempPath, data, options);
@@ -350,6 +267,57 @@ export class Client {
       }
     } finally {
       this.manager.release(id);
+    }
+  }
+
+  public async createWriteStream(path: string, options?: WriteStreamOptions | BufferEncoding): Promise<WriteStream> {
+    if (!pth.isAbsolute(path)) {
+      throw new Error("`path` must be absolute");
+    }
+    path = pth.resolve(path);
+    const dir = pth.dirname(path);
+
+    const id = await this.manager.acquire(path, "write");
+    try {
+      if (this.durable) {
+        const parsed = pth.parse(path);
+        const root = parsed.root;
+        const segments = parsed.dir.slice(root.length).split(pth.sep).filter(Boolean);
+        let current = root;
+        let parent: string;
+        for (const segment of segments) {
+          parent = current;
+          current = pth.join(current, segment);
+          try {
+            await fsp.mkdir(current, { recursive: false });
+            const fh = await fsp.open(parent, "r");
+            try {
+              await fh.sync();
+            } finally {
+              await fh.close();
+            }
+          } catch (err) {
+            if (!(err instanceof Error && "code" in err && err.code == "EEXIST")) {
+              throw err;
+            }
+          }
+        }
+      } else {
+        await fsp.mkdir(dir, { recursive: true });
+      }
+
+      const tempFile = `.${crypto.randomUUID()}`;
+      const tempPath = pth.join(dir, tempFile);
+      const writeStreamOptions =
+        typeof options == "string"
+          ? { encoding: options, durable: this.durable, path, dir, id, manager: this.manager }
+          : { ...options, ...{ durable: this.durable, path, dir, id, manager: this.manager } };
+      const writeStream = new WriteStream(tempPath, writeStreamOptions);
+      await once(writeStream, "ready");
+      return writeStream;
+    } catch (err) {
+      this.manager.release(id);
+      throw err;
     }
   }
 }
