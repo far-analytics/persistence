@@ -90,7 +90,7 @@ Persistence supports horizontal scaling across multiple clients, as long as all 
 
 ## Durability
 
-When a client instance is instantiated with `{ durable: true }`, writes are flushed and parent directories are `fsync`’d to reduce the chance of data loss after a crash. Durability guarantees are best‑effort and depend on filesystem and OS behavior.
+When a client instance is instantiated with `{ durable: true }`, `write()` flushes file data before rename and write/delete operations `fsync` parent directories to reduce the chance of data loss after a crash. Durability guarantees are best‑effort and depend on filesystem and OS behavior.
 
 ## Atomicity
 
@@ -107,9 +107,8 @@ Persistence supports atomic-style file replacement via temp file + rename for `w
 
 ## Planned
 
-- Optional lock timeout / abort signal.
+- Optional lock timeout.
 - Temp file cleanup utility (i.e. in the event of a crash or power loss).
-- A couple more tests for symlink/path edge cases.
 
 ## API
 
@@ -121,7 +120,7 @@ The _Persistence_ API provides a path-aware lock manager and a filesystem client
 
 - options `<ClientOptions>` Options passed to the `Client`.
   - manager `<LockManager>` The lock manager instance used to coordinate access.
-  - durable `<boolean>` If `true`, use directory `fsync` and flush writes for stronger durability. **Default: `false`**
+  - durable `<boolean>` If `true`, use stronger durability behavior for filesystem mutations: `write()` flushes the temp file before rename, and write/delete operations `fsync` the parent directory. **Default: `false`**
 
 Use a `Client` instance to read, write, list, and delete files with hierarchical locking.
 
@@ -207,6 +206,7 @@ Notes:
 
 - The stream writes to a temp file in the target directory and renames it into place before `finish` is emitted.
 - On success, `finish` means the write has been committed.
+- In durable mode, the parent directory is `fsync`'d after rename.
 - The lock is held for the entire stream lifetime, so long-running writes will block conflicting operations.
 
 _public_ **client.write(path, data, options?)**
@@ -222,7 +222,7 @@ _public_ **client.write(path, data, options?)**
 
 Returns: `<Promise<void>>`
 
-Writes a file using a temp file + rename. In durable mode, writes are flushed and directories are `fsync`'d. For the full option list, see the Node.js `fs.promises.writeFile` documentation. When the `Client` is instantiated with `durable: true`, `flush` is forced to `true` regardless of the per‑call option.
+Writes a file using a temp file + rename. In durable mode, `write()` flushes the temp file before rename and `fsync`'s the parent directory after rename. For the full option list, see the Node.js `fs.promises.writeFile` documentation. When the `Client` is instantiated with `durable: true`, `flush` is forced to `true` regardless of the per‑call option.
 
 _public_ **client.delete(path, options?)**
 
@@ -306,7 +306,7 @@ cd persistence
 #### Install dependencies.
 
 ```bash
-npm install && npm update
+npm install
 ```
 
 #### Run the tests.
