@@ -17,8 +17,7 @@
   "author": "FAR",
   "license": "MIT",
   "engines": {
-    "npm": ">=10.2.3",
-    "node": ">=18.20.4"
+    "node": ">=20.10.0"
   },
   "dependencies": {
     "@far-analytics/persistence": "file:../.."
