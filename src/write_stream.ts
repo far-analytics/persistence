@@ -26,7 +26,6 @@ export class WriteStream extends stream.Writable {
       flags: options.flags,
       encoding: options.encoding,
       mode: options.mode,
-      emitClose: options.emitClose,
       start: options.start,
       signal: options.signal,
       highWaterMark: options.highWaterMark,
@@ -64,11 +63,17 @@ export class WriteStream extends stream.Writable {
         await finished(this.fsWriteStream);
         await fsp.rename(this.tempPath, this.path);
         if (this.durable) {
-          const fh = await fsp.open(this.dir, "r");
+          const ffh = await fsp.open(this.path, "r");
           try {
-            await fh.sync();
+            await ffh.sync();
           } finally {
-            await fh.close();
+            await ffh.close();
+          }
+          const dfh = await fsp.open(this.dir, "r");
+          try {
+            await dfh.sync();
+          } finally {
+            await dfh.close();
           }
         }
         callback();
