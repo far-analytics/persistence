@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import * as http from "node:http";
 import * as fs from "node:fs";
 import * as pth from "node:path";
