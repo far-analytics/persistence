@@ -800,7 +800,7 @@ await suite("Client (streams)", async () => {
     const file = pth.join(dir, "writev.txt");
     await fsp.mkdir(dir, { recursive: true });
 
-    const parts = Array.from({ length: 200 }, (_, i) => `${i},`);
+    const parts = Array.from({ length: 200 }, (_, i) => `${i.toString()},`);
     const expected = parts.join("") + "done";
 
     const ws = await streamClient.createWriteStream(file, "utf8");
