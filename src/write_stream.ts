@@ -12,7 +12,7 @@ export class WriteStream extends stream.Writable {
   protected durable: boolean;
   protected manager: LockManager;
   protected id: number;
-  public writeStream: fs.WriteStream;
+  public fsWriteStream: fs.WriteStream;
 
   constructor(tempPath: string, options: WriteStreamOptions & { durable: boolean; path: string; dir: string; id: number; manager: LockManager }) {
     super({ highWaterMark: options.highWaterMark, defaultEncoding: options.encoding });
@@ -22,7 +22,7 @@ export class WriteStream extends stream.Writable {
     this.durable = options.durable;
     this.manager = options.manager;
     this.id = options.id;
-    this.writeStream = fs.createWriteStream(tempPath, {
+    this.fsWriteStream = fs.createWriteStream(tempPath, {
       flags: options.flags,
       encoding: options.encoding,
       mode: options.mode,
@@ -31,14 +31,14 @@ export class WriteStream extends stream.Writable {
       signal: options.signal,
       highWaterMark: options.highWaterMark,
     });
-    this.writeStream.on("ready", () => this.emit("ready"));
-    this.writeStream.on("open", () => this.emit("open"));
-    this.writeStream.on("error", (err) => this.destroy(err));
+    this.fsWriteStream.on("ready", () => this.emit("ready"));
+    this.fsWriteStream.on("open", () => this.emit("open"));
+    this.fsWriteStream.on("error", (err) => this.destroy(err));
   }
 
   _write(chunk: string | Buffer, encoding: BufferEncoding, callback: (error?: Error | null) => void): void {
-    if (!this.writeStream.write(chunk, encoding)) {
-      this.writeStream.once("drain", () => {
+    if (!this.fsWriteStream.write(chunk, encoding)) {
+      this.fsWriteStream.once("drain", () => {
         callback();
       });
       return;
@@ -48,8 +48,8 @@ export class WriteStream extends stream.Writable {
 
   _writev(chunks: { chunk: string | Buffer; encoding: BufferEncoding }[], callback: (error?: Error | null) => void): void {
     const buffer = Buffer.concat(chunks.map(({ chunk, encoding }) => (Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, encoding))));
-    if (!this.writeStream.write(buffer)) {
-      this.writeStream.once("drain", () => {
+    if (!this.fsWriteStream.write(buffer)) {
+      this.fsWriteStream.once("drain", () => {
         callback();
       });
       return;
@@ -60,8 +60,8 @@ export class WriteStream extends stream.Writable {
   _final(callback: (error?: Error | null) => void): void {
     void (async () => {
       try {
-        this.writeStream.end();
-        await finished(this.writeStream);
+        this.fsWriteStream.end();
+        await finished(this.fsWriteStream);
         await fsp.rename(this.tempPath, this.path);
         if (this.durable) {
           const fh = await fsp.open(this.dir, "r");
@@ -84,8 +84,8 @@ export class WriteStream extends stream.Writable {
   _destroy(error: Error | null, callback: (error?: Error | null) => void): void {
     void (async () => {
       try {
-        this.writeStream.destroy(error ?? undefined);
-        await finished(this.writeStream).catch(() => {});
+        this.fsWriteStream.destroy(error ?? undefined);
+        await finished(this.fsWriteStream).catch(() => {});
         await fsp.rm(this.tempPath, { force: true });
         callback(error);
       } catch (err) {

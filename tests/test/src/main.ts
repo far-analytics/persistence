@@ -709,7 +709,7 @@ await suite("Client (streams)", async () => {
 
     const ws = await streamClient.createWriteStream(file);
     ws.write(JSON.stringify({ v: 2 }));
-    ws.writeStream.once("finish", () => {
+    ws.fsWriteStream.once("finish", () => {
       fs.rmSync((ws as unknown as { tempPath: string }).tempPath, { force: true });
     });
     ws.end();
@@ -761,7 +761,7 @@ await suite("Client (streams)", async () => {
 
     const ws = await streamClient.createWriteStream(file);
     ws.write(JSON.stringify({ v: 2 }));
-    ws.writeStream.once("finish", () => {
+    ws.fsWriteStream.once("finish", () => {
       fs.rmSync((ws as unknown as { tempPath: string }).tempPath, { force: true });
     });
     ws.end();
