@@ -90,7 +90,7 @@ Persistence supports horizontal scaling across multiple clients, as long as all 
 
 ## Durability
 
-When a client instance is instantiated with `{ durable: true }`, `write()` flushes file data before rename and write/delete operations `fsync` parent directories to reduce the chance of data loss after a crash. Durability guarantees are best‑effort and depend on filesystem and OS behavior.
+When a client instance is instantiated with `{ durable: true }`, `write()` flushes file data before rename, `createWriteStream()` syncs the committed file and then `fsync`'s the parent directory, and write/delete operations `fsync` parent directories to reduce the chance of data loss after a crash. Durability guarantees are best‑effort and depend on filesystem and OS behavior.
 
 Important semantic note:
 
@@ -292,6 +292,10 @@ The root node of the internal lock graph.
 
 - locks `<Array<Promise<unknown>>>` Promises the lock acquisition must await.
 - node `<GraphNode>` The graph node for the path.
+
+## Versioning
+
+Until `2.0.0`, Persistence does not promise strict semantic versioning. Minor releases may include API adjustments, behavioral changes, or other breaking changes.
 
 ## Tests
 
