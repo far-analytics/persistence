@@ -4,12 +4,15 @@ import * as pth from "node:path";
 import * as fsp from "node:fs/promises";
 import { once } from "node:events";
 import { finished } from "node:stream/promises";
+import { createRequire } from "node:module";
 import { Client, LockManager } from "@far-analytics/persistence";
 import { StreamBuffer } from "./stream_buffer.js";
 import { test, after, before, suite } from "node:test";
 import * as assert from "node:assert";
 
 const WEB_ROOT = pth.join(process.cwd(), "web_root");
+const require = createRequire(import.meta.url);
+const mutableFsp = require("node:fs/promises") as typeof fsp;
 
 const manager = new LockManager({ errorHandler: () => {} });
 const client = new Client({ manager });
@@ -63,6 +66,34 @@ const getGate = (id: string): Gate => {
     gates.set(id, gate);
   }
   return gate;
+};
+
+const withFailingSyncOnOpen = async <T>(path: string, error: Error, fn: () => Promise<T>): Promise<T> => {
+  const originalOpen = mutableFsp.open;
+  mutableFsp.open = async (...args: Parameters<typeof fsp.open>) => {
+    const handle = await originalOpen(...args);
+    if (args[0] !== path || args[1] !== "r") {
+      return handle;
+    }
+    return new Proxy(handle, {
+      get(target, prop) {
+        if (prop === "sync") {
+          return (): Promise<void> => Promise.reject(error);
+        }
+        const value = Reflect.get(target, prop, target) as unknown;
+        if (typeof value !== "function") {
+          return value;
+        }
+        const fn = value as (...args: unknown[]) => unknown;
+        return (...args: unknown[]): unknown => Reflect.apply(fn, target, args);
+      },
+    });
+  };
+  try {
+    return await fn();
+  } finally {
+    mutableFsp.open = originalOpen;
+  }
 };
 
 server.on("request", (req: http.IncomingMessage, res: http.ServerResponse & { req: http.IncomingMessage }) => {
@@ -540,6 +571,20 @@ await suite("Client (streams)", async () => {
     assert.strictEqual(data, JSON.stringify({ ok: true }));
   });
 
+  await test("createReadStream releases the lock when stream creation throws synchronously.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const dir = pth.join(WEB_ROOT, "streams");
+    const file = pth.join(dir, "sync-read-error.json");
+    await fsp.mkdir(dir, { recursive: true });
+    await streamClient.write(file, JSON.stringify({ ok: true }));
+
+    await assert.rejects(streamClient.createReadStream(file, { start: -1 }), /ERR_OUT_OF_RANGE|out of range/i);
+
+    await streamClient.write(file, JSON.stringify({ ok: false }));
+    const data = await streamClient.read(file, "utf8");
+    assert.strictEqual(data, JSON.stringify({ ok: false }));
+  });
+
   await test("createReadStream early close releases the lock.", async () => {
     const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
     const dir = pth.join(WEB_ROOT, "streams");
@@ -778,6 +823,66 @@ await suite("Client (streams)", async () => {
 
     const readData = await streamClient.read(file, "utf8");
     assert.strictEqual(readData, JSON.stringify({ v: 1 }));
+
+    await streamClient.write(file, JSON.stringify({ v: 3 }));
+    const nextData = await streamClient.read(file, "utf8");
+    assert.strictEqual(nextData, JSON.stringify({ v: 3 }));
+  });
+
+  await test("durable createWriteStream reports file sync failures after rename and releases the lock.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
+    const dir = pth.join(WEB_ROOT, "streams", "durable-file-sync-error");
+    const file = pth.join(dir, "data.json");
+    await fsp.mkdir(dir, { recursive: true });
+    await streamClient.write(file, JSON.stringify({ v: 1 }));
+
+    await withFailingSyncOnOpen(file, new Error("Injected file sync failure"), async () => {
+      const ws = await streamClient.createWriteStream(file);
+      ws.end(JSON.stringify({ v: 2 }));
+
+      await finished(ws).then(
+        () => {
+          throw new Error("Expected durable createWriteStream to fail during file sync");
+        },
+        () => {}
+      );
+    });
+
+    const entries = await fsp.readdir(dir);
+    assert.deepStrictEqual(entries, ["data.json"]);
+
+    const readData = await streamClient.read(file, "utf8");
+    assert.strictEqual(readData, JSON.stringify({ v: 2 }));
+
+    await streamClient.write(file, JSON.stringify({ v: 3 }));
+    const nextData = await streamClient.read(file, "utf8");
+    assert.strictEqual(nextData, JSON.stringify({ v: 3 }));
+  });
+
+  await test("durable createWriteStream reports directory sync failures after rename and releases the lock.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
+    const dir = pth.join(WEB_ROOT, "streams", "durable-directory-sync-error");
+    const file = pth.join(dir, "data.json");
+    await fsp.mkdir(dir, { recursive: true });
+    await streamClient.write(file, JSON.stringify({ v: 1 }));
+
+    await withFailingSyncOnOpen(dir, new Error("Injected directory sync failure"), async () => {
+      const ws = await streamClient.createWriteStream(file);
+      ws.end(JSON.stringify({ v: 2 }));
+
+      await finished(ws).then(
+        () => {
+          throw new Error("Expected durable createWriteStream to fail during directory sync");
+        },
+        () => {}
+      );
+    });
+
+    const entries = await fsp.readdir(dir);
+    assert.deepStrictEqual(entries, ["data.json"]);
+
+    const readData = await streamClient.read(file, "utf8");
+    assert.strictEqual(readData, JSON.stringify({ v: 2 }));
 
     await streamClient.write(file, JSON.stringify({ v: 3 }));
     const nextData = await streamClient.read(file, "utf8");
