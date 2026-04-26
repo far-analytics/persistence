@@ -121,9 +121,7 @@ The _Persistence_ API provides a path-aware lock manager and a filesystem client
 
 - options `<ClientOptions>` Options passed to the `Client`.
   - manager `<LockManager>` The lock manager instance used to coordinate access.
-  - tempSuffix `<string>` Optional temp filename suffix used during atomic-style writes. **Default: `"tmp"`**
   - durable `<boolean>` If `true`, use directory `fsync` and flush writes for stronger durability. **Default: `false`**
-  - errorHandler `<typeof console.error>` Optional error handler used for internal async stream errors. **Default:** `console.error`
 
 Use a `Client` instance to read, write, list, and delete files with hierarchical locking.
 
@@ -179,39 +177,37 @@ _public_ **client.createReadStream(path, options?)**
   - flags `<string>` File system flags. **Default:** `"r"`
   - encoding `<string | null>` **Default:** `null`
   - mode `<integer>` **Default:** `0o666`
+  - emitClose `<boolean>` Emit `close` after destroy. See Node.js stream documentation.
   - start `<number>` Start offset.
   - end `<number>` End offset (inclusive).
+  - signal `<AbortSignal>` Abort an in‑progress read.
   - highWaterMark `<number>` Read buffer size.
 
 Returns: `<Promise<fs.ReadStream>>`
 
-Creates a read stream and holds a read lock for the stream lifetime. For the supported option list, see the Node.js `fs.createReadStream` documentation.
-
-Notes:
-
-- `fd` is not supported.
-- `autoClose` must not be `false`.
+Creates a read stream and holds a read lock for the stream lifetime. Persistence supports the subset of `fs.createReadStream` options listed above.
 
 _public_ **client.createWriteStream(path, options?)**
 
 - path `<string>` An absolute path to a file.
-- options `<Object>` Optional `createWriteStream` options.
+- options `<Object | string>` Optional write stream options.
   - flags `<string>` File system flags. **Default:** `"w"`
   - encoding `<string>` **Default:** `"utf8"`
   - mode `<integer>` **Default:** `0o666`
+  - emitClose `<boolean>` Emit `close` after destroy. See Node.js stream documentation.
   - start `<number>` Start offset.
+  - signal `<AbortSignal>` Abort an in‑progress write.
   - highWaterMark `<number>` Write buffer size.
 
-Returns: `<Promise<fs.WriteStream>>`
+Returns: `<Promise<persistence.WriteStream>>`
 
-Creates an atomic write stream (temp file + rename) and holds a write lock for the stream lifetime. For the supported option list, see the Node.js `fs.createWriteStream` documentation. When the `Client` is instantiated with `durable: true`, `flush` is forced to `true` regardless of the per‑call option.
+Creates an atomic write stream abstraction backed by a temp file + rename and holds a write lock for the stream lifetime. Persistence supports the subset of write-stream options listed above.
 
 Notes:
 
-- The stream writes to a temp file in the target directory; after `finish`, the client attempts to rename it into place.
+- The stream writes to a temp file in the target directory and renames it into place before `finish` is emitted.
+- On success, `finish` means the write has been committed.
 - The lock is held for the entire stream lifetime, so long-running writes will block conflicting operations.
-- `fd` is not supported.
-- `autoClose` must not be `false`.
 
 _public_ **client.write(path, data, options?)**
 
