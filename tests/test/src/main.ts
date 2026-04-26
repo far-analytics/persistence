@@ -13,7 +13,7 @@ import * as assert from "node:assert";
 const WEB_ROOT = pth.join(process.cwd(), "web_root");
 
 const manager = new LockManager({ errorHandler: () => {} });
-const client = new Client({ manager, errorHandler: () => {} });
+const client = new Client({ manager });
 const server = http.createServer();
 
 server.listen({ port: 0, host: "127.0.0.1" });
@@ -299,7 +299,7 @@ await suite("HTTP server", async () => {
 
 await suite("Client (durable)", async () => {
   await test("Write/read/delete with durable client.", async () => {
-    const durableClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true, errorHandler: () => {} });
+    const durableClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
     const dir = pth.join(WEB_ROOT, "durable");
     const file = pth.join(dir, "data.json");
     await fsp.mkdir(dir, { recursive: true });
@@ -320,9 +320,51 @@ await suite("Client (durable)", async () => {
   });
 });
 
+await suite("Client (write)", async () => {
+  await test("write preserves the existing target and releases the lock when commit fails.", async () => {
+    const writeClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const dir = pth.join(WEB_ROOT, "write");
+    const path = pth.join(dir, "target");
+    const child = pth.join(path, "child.txt");
+    await fsp.rm(dir, { recursive: true, force: true });
+    await fsp.mkdir(path, { recursive: true });
+    await fsp.writeFile(child, "keep");
+
+    await assert.rejects(writeClient.write(path, "oops", "utf8"), /EISDIR|illegal operation on a directory/i);
+
+    const childData = await fsp.readFile(child, "utf8");
+    assert.strictEqual(childData, "keep");
+
+    await writeClient.delete(path, { recursive: true });
+    await writeClient.write(path, "ok", "utf8");
+    const data = await writeClient.read(path, "utf8");
+    assert.strictEqual(data, "ok");
+  });
+
+  await test("durable write preserves the existing target and releases the lock when commit fails.", async () => {
+    const writeClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
+    const dir = pth.join(WEB_ROOT, "durable-write");
+    const path = pth.join(dir, "target");
+    const child = pth.join(path, "child.txt");
+    await fsp.rm(dir, { recursive: true, force: true });
+    await fsp.mkdir(path, { recursive: true });
+    await fsp.writeFile(child, "keep");
+
+    await assert.rejects(writeClient.write(path, "oops", "utf8"), /EISDIR|illegal operation on a directory/i);
+
+    const childData = await fsp.readFile(child, "utf8");
+    assert.strictEqual(childData, "keep");
+
+    await writeClient.delete(path, { recursive: true });
+    await writeClient.write(path, "ok", "utf8");
+    const data = await writeClient.read(path, "utf8");
+    assert.strictEqual(data, "ok");
+  });
+});
+
 await suite("Client (streams)", async () => {
   await test("createWriteStream is atomic and holds the lock.", async () => {
-    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), errorHandler: () => {} });
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
     const dir = pth.join(WEB_ROOT, "streams");
     const file = pth.join(dir, "data.json");
     await fsp.mkdir(dir, { recursive: true });
@@ -346,8 +388,44 @@ await suite("Client (streams)", async () => {
     await readPromise;
   });
 
+  await test("createWriteStream finish means the file is already committed.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const dir = pth.join(WEB_ROOT, "streams", "finish-commit");
+    const file = pth.join(dir, "data.json");
+    await fsp.mkdir(dir, { recursive: true });
+    await streamClient.write(file, JSON.stringify({ v: 1 }));
+
+    const ws = await streamClient.createWriteStream(file);
+    ws.end(JSON.stringify({ v: 2 }));
+    await once(ws, "finish");
+
+    const rawData = await fsp.readFile(file, "utf8");
+    assert.strictEqual(rawData, JSON.stringify({ v: 2 }));
+
+    const entries = await fsp.readdir(dir);
+    assert.deepStrictEqual(entries, ["data.json"]);
+  });
+
+  await test("durable createWriteStream finish means the file is already committed.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
+    const dir = pth.join(WEB_ROOT, "streams", "durable-finish-commit");
+    const file = pth.join(dir, "data.json");
+    await fsp.mkdir(dir, { recursive: true });
+    await streamClient.write(file, JSON.stringify({ v: 1 }));
+
+    const ws = await streamClient.createWriteStream(file);
+    ws.end(JSON.stringify({ v: 2 }));
+    await once(ws, "finish");
+
+    const rawData = await fsp.readFile(file, "utf8");
+    assert.strictEqual(rawData, JSON.stringify({ v: 2 }));
+
+    const entries = await fsp.readdir(dir);
+    assert.deepStrictEqual(entries, ["data.json"]);
+  });
+
   await test("createReadStream reads full content.", async () => {
-    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), errorHandler: () => {} });
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
     const dir = pth.join(WEB_ROOT, "streams");
     const file = pth.join(dir, "read.json");
     await fsp.mkdir(dir, { recursive: true });
@@ -363,14 +441,173 @@ await suite("Client (streams)", async () => {
     assert.strictEqual(data, JSON.stringify({ ok: true }));
   });
 
-  // await test("createReadStream rejects unsupported stream options.", async () => {
-  //   const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), errorHandler: () => {} });
-  //   await assert.rejects(streamClient.createReadStream("/tmp/read.json", { autoClose: false } as Parameters<typeof fs.createReadStream>[1]), /autoClose/);
-  //   await assert.rejects(streamClient.createReadStream("/tmp/read.json", { fd: 1 } as Parameters<typeof fs.createReadStream>[1]), /options\.fd/);
-  // });
+  await test("createReadStream honors text encoding options.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const dir = pth.join(WEB_ROOT, "streams");
+    const file = pth.join(dir, "read-encoding.txt");
+    await fsp.mkdir(dir, { recursive: true });
+    await streamClient.write(file, "hello world", "utf16le");
+
+    const rs = await streamClient.createReadStream(file, "utf16le");
+    const chunks: string[] = [];
+    rs.on("data", (chunk) => {
+      chunks.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf16le"));
+    });
+    await finished(rs);
+    assert.strictEqual(chunks.join(""), "hello world");
+  });
+
+  await test("createReadStream honors range options.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const dir = pth.join(WEB_ROOT, "streams");
+    const file = pth.join(dir, "read-range.txt");
+    await fsp.mkdir(dir, { recursive: true });
+    await streamClient.write(file, "abcdef", "utf8");
+
+    const rs = await streamClient.createReadStream(file, { encoding: "utf8", start: 1, end: 3 });
+    const chunks: string[] = [];
+    rs.on("data", (chunk) => {
+      chunks.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8"));
+    });
+    await finished(rs);
+    assert.strictEqual(chunks.join(""), "bcd");
+  });
+
+  await test("createReadStream range reads still hold the lock until close.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const dir = pth.join(WEB_ROOT, "streams");
+    const file = pth.join(dir, "read-range-lock.txt");
+    await fsp.mkdir(dir, { recursive: true });
+    await streamClient.write(file, "abcdef", "utf8");
+
+    const rs = await streamClient.createReadStream(file, { encoding: "utf8", start: 1, end: 3 });
+    const chunks: string[] = [];
+    rs.on("data", (chunk) => {
+      chunks.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8"));
+    });
+
+    let writeResolved = false;
+    const writePromise = streamClient.write(file, "rewritten", "utf8").then(() => {
+      writeResolved = true;
+    });
+    await new Promise((r) => setImmediate(r));
+    assert.strictEqual(writeResolved, false);
+
+    await finished(rs);
+    assert.strictEqual(chunks.join(""), "bcd");
+    await writePromise;
+
+    const data = await streamClient.read(file, "utf8");
+    assert.strictEqual(data, "rewritten");
+  });
+
+  await test("createReadStream ignores unsupported JS-only options and releases the lock.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const dir = pth.join(WEB_ROOT, "streams");
+    const file = pth.join(dir, "read-options.json");
+    await fsp.mkdir(dir, { recursive: true });
+    await streamClient.write(file, JSON.stringify({ ok: true }));
+
+    const rs = await streamClient.createReadStream(
+      file,
+      { encoding: "utf8", autoClose: false, fd: 1 } as unknown as Parameters<typeof fs.createReadStream>[1]
+    );
+    const chunks: string[] = [];
+    rs.on("data", (chunk) => {
+      chunks.push(String(chunk));
+    });
+    await finished(rs);
+    assert.strictEqual(chunks.join(""), JSON.stringify({ ok: true }));
+
+    await streamClient.write(file, JSON.stringify({ ok: false }));
+    const nextData = await streamClient.read(file, "utf8");
+    assert.strictEqual(nextData, JSON.stringify({ ok: false }));
+  });
+
+  await test("createReadStream releases the lock when stream creation fails.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const dir = pth.join(WEB_ROOT, "streams");
+    const file = pth.join(dir, "missing-read.json");
+    await fsp.mkdir(dir, { recursive: true });
+    await fsp.rm(file, { force: true });
+
+    const rs = await streamClient.createReadStream(file);
+    await finished(rs).then(
+      () => {
+        throw new Error("Expected createReadStream to fail");
+      },
+      () => {}
+    );
+
+    await streamClient.write(file, JSON.stringify({ ok: true }));
+    const data = await streamClient.read(file, "utf8");
+    assert.strictEqual(data, JSON.stringify({ ok: true }));
+  });
+
+  await test("createReadStream early close releases the lock.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const dir = pth.join(WEB_ROOT, "streams");
+    const file = pth.join(dir, "read-close.json");
+    await fsp.mkdir(dir, { recursive: true });
+    await streamClient.write(file, "x".repeat(1e6));
+
+    const rs = await streamClient.createReadStream(file);
+    rs.once("data", () => {
+      rs.destroy();
+    });
+    await finished(rs).catch(() => {});
+
+    await streamClient.write(file, JSON.stringify({ ok: true }));
+    const data = await streamClient.read(file, "utf8");
+    assert.strictEqual(data, JSON.stringify({ ok: true }));
+  });
+
+  await test("createReadStream abort signal releases the lock.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const dir = pth.join(WEB_ROOT, "streams");
+    const file = pth.join(dir, "read-abort.txt");
+    await fsp.mkdir(dir, { recursive: true });
+    await streamClient.write(file, "x".repeat(1e6), "utf8");
+
+    const controller = new AbortController();
+    const rs = await streamClient.createReadStream(file, { signal: controller.signal });
+    rs.once("data", () => {
+      controller.abort();
+    });
+    await finished(rs).catch(() => {});
+
+    await streamClient.write(file, JSON.stringify({ ok: true }));
+    const data = await streamClient.read(file, "utf8");
+    assert.strictEqual(data, JSON.stringify({ ok: true }));
+  });
+
+  await test("equivalent normalized paths share the same lock.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const dir = pth.join(WEB_ROOT, "streams", "normalized-paths");
+    const file = pth.join(dir, "data.json");
+    const oddPath = `${dir}/./subdir/../data.json`;
+    await fsp.mkdir(dir, { recursive: true });
+    await streamClient.write(file, JSON.stringify({ v: 1 }));
+
+    const rs = await streamClient.createReadStream(oddPath, "utf8");
+    rs.once("data", () => {});
+
+    let writeResolved = false;
+    const writePromise = streamClient.write(file, JSON.stringify({ v: 2 })).then(() => {
+      writeResolved = true;
+    });
+    await new Promise((r) => setImmediate(r));
+    assert.strictEqual(writeResolved, false);
+
+    await finished(rs);
+    await writePromise;
+
+    const data = await streamClient.read(file, "utf8");
+    assert.strictEqual(data, JSON.stringify({ v: 2 }));
+  });
 
   await test("createWriteStream early close preserves existing data and releases the lock.", async () => {
-    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), errorHandler: () => {} });
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
     const dir = pth.join(WEB_ROOT, "streams");
     const file = pth.join(dir, "error.json");
     await fsp.mkdir(dir, { recursive: true });
@@ -389,8 +626,369 @@ await suite("Client (streams)", async () => {
     assert.strictEqual(nextData, JSON.stringify({ v: 2 }));
   });
 
+  await test("createWriteStream abort signal preserves existing data and releases the lock.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const dir = pth.join(WEB_ROOT, "streams");
+    const file = pth.join(dir, "abort.json");
+    await fsp.mkdir(dir, { recursive: true });
+    await streamClient.write(file, JSON.stringify({ v: 1 }));
+
+    const controller = new AbortController();
+    const ws = await streamClient.createWriteStream(file, { signal: controller.signal });
+    ws.write('{"v":');
+    controller.abort();
+    await finished(ws).catch(() => {});
+
+    const readData = await streamClient.read(file, "utf8");
+    assert.strictEqual(readData, JSON.stringify({ v: 1 }));
+
+    await streamClient.write(file, JSON.stringify({ v: 2 }));
+    const nextData = await streamClient.read(file, "utf8");
+    assert.strictEqual(nextData, JSON.stringify({ v: 2 }));
+  });
+
+  await test("durable createWriteStream abort signal preserves existing data and releases the lock.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
+    const dir = pth.join(WEB_ROOT, "streams", "durable-abort-signal");
+    const file = pth.join(dir, "abort.json");
+    await fsp.mkdir(dir, { recursive: true });
+    await streamClient.write(file, JSON.stringify({ v: 1 }));
+
+    const controller = new AbortController();
+    const ws = await streamClient.createWriteStream(file, { signal: controller.signal });
+    ws.write('{"v":');
+    controller.abort();
+    await finished(ws).catch(() => {});
+
+    const readData = await streamClient.read(file, "utf8");
+    assert.strictEqual(readData, JSON.stringify({ v: 1 }));
+
+    await streamClient.write(file, JSON.stringify({ v: 2 }));
+    const nextData = await streamClient.read(file, "utf8");
+    assert.strictEqual(nextData, JSON.stringify({ v: 2 }));
+  });
+
+  await test("createWriteStream ignores unsupported JS-only options and releases the lock.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const dir = pth.join(WEB_ROOT, "streams");
+    const file = pth.join(dir, "write-options.json");
+    await fsp.mkdir(dir, { recursive: true });
+
+    const ws = await streamClient.createWriteStream(
+      file,
+      { encoding: "utf8", autoClose: false, fd: 1 } as unknown as Parameters<typeof fs.createWriteStream>[1]
+    );
+    ws.end(JSON.stringify({ ok: true }));
+    await finished(ws);
+
+    const readData = await streamClient.read(file, "utf8");
+    assert.strictEqual(readData, JSON.stringify({ ok: true }));
+
+    await streamClient.write(file, JSON.stringify({ ok: false }));
+    const nextData = await streamClient.read(file, "utf8");
+    assert.strictEqual(nextData, JSON.stringify({ ok: false }));
+  });
+
+  await test("durable createWriteStream ignores unsupported JS-only options and releases the lock.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
+    const dir = pth.join(WEB_ROOT, "streams", "durable-write-options");
+    const file = pth.join(dir, "data.json");
+    await fsp.mkdir(dir, { recursive: true });
+
+    const ws = await streamClient.createWriteStream(
+      file,
+      { encoding: "utf8", autoClose: false, fd: 1 } as unknown as Parameters<typeof fs.createWriteStream>[1]
+    );
+    ws.end(JSON.stringify({ ok: true }));
+    await finished(ws);
+
+    const readData = await streamClient.read(file, "utf8");
+    assert.strictEqual(readData, JSON.stringify({ ok: true }));
+
+    await streamClient.write(file, JSON.stringify({ ok: false }));
+    const nextData = await streamClient.read(file, "utf8");
+    assert.strictEqual(nextData, JSON.stringify({ ok: false }));
+  });
+
+  await test("createWriteStream preserves existing data when commit fails after temp write.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const dir = pth.join(WEB_ROOT, "streams");
+    const file = pth.join(dir, "commit-error.json");
+    await fsp.mkdir(dir, { recursive: true });
+    await streamClient.write(file, JSON.stringify({ v: 1 }));
+
+    const ws = await streamClient.createWriteStream(file);
+    ws.write(JSON.stringify({ v: 2 }));
+    ws.writeStream.once("finish", () => {
+      fs.rmSync((ws as unknown as { tempPath: string }).tempPath, { force: true });
+    });
+    ws.end();
+
+    await finished(ws).then(
+      () => {
+        throw new Error("Expected createWriteStream to fail");
+      },
+      () => {}
+    );
+
+    const readData = await streamClient.read(file, "utf8");
+    assert.strictEqual(readData, JSON.stringify({ v: 1 }));
+
+    await streamClient.write(file, JSON.stringify({ v: 3 }));
+    const nextData = await streamClient.read(file, "utf8");
+    assert.strictEqual(nextData, JSON.stringify({ v: 3 }));
+  });
+
+  await test("durable createWriteStream early close preserves existing data, cleans temp files, and releases the lock.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
+    const dir = pth.join(WEB_ROOT, "streams", "durable-abort");
+    const file = pth.join(dir, "error.json");
+    await fsp.mkdir(dir, { recursive: true });
+    await streamClient.write(file, JSON.stringify({ v: 1 }));
+
+    const ws = await streamClient.createWriteStream(file);
+    ws.write('{"v":');
+    ws.destroy();
+    await finished(ws).catch(() => {});
+
+    const entries = await fsp.readdir(dir);
+    assert.deepStrictEqual(entries, ["error.json"]);
+
+    const readData = await streamClient.read(file, "utf8");
+    assert.strictEqual(readData, JSON.stringify({ v: 1 }));
+
+    await streamClient.write(file, JSON.stringify({ v: 2 }));
+    const nextData = await streamClient.read(file, "utf8");
+    assert.strictEqual(nextData, JSON.stringify({ v: 2 }));
+  });
+
+  await test("durable createWriteStream preserves existing data when commit fails after temp write.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
+    const dir = pth.join(WEB_ROOT, "streams", "durable-commit-error");
+    const file = pth.join(dir, "data.json");
+    await fsp.mkdir(dir, { recursive: true });
+    await streamClient.write(file, JSON.stringify({ v: 1 }));
+
+    const ws = await streamClient.createWriteStream(file);
+    ws.write(JSON.stringify({ v: 2 }));
+    ws.writeStream.once("finish", () => {
+      fs.rmSync((ws as unknown as { tempPath: string }).tempPath, { force: true });
+    });
+    ws.end();
+
+    await finished(ws).then(
+      () => {
+        throw new Error("Expected durable createWriteStream to fail");
+      },
+      () => {}
+    );
+
+    const entries = await fsp.readdir(dir);
+    assert.deepStrictEqual(entries, ["data.json"]);
+
+    const readData = await streamClient.read(file, "utf8");
+    assert.strictEqual(readData, JSON.stringify({ v: 1 }));
+
+    await streamClient.write(file, JSON.stringify({ v: 3 }));
+    const nextData = await streamClient.read(file, "utf8");
+    assert.strictEqual(nextData, JSON.stringify({ v: 3 }));
+  });
+
+  await test("createWriteStream writes exact content across many small writes.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const dir = pth.join(WEB_ROOT, "streams");
+    const file = pth.join(dir, "writev.txt");
+    await fsp.mkdir(dir, { recursive: true });
+
+    const parts = Array.from({ length: 200 }, (_, i) => `${i},`);
+    const expected = parts.join("") + "done";
+
+    const ws = await streamClient.createWriteStream(file, "utf8");
+    for (const part of parts) {
+      ws.write(part);
+    }
+    ws.end("done");
+    await finished(ws);
+
+    const data = await streamClient.read(file, "utf8");
+    assert.strictEqual(data, expected);
+  });
+
+  await test("createWriteStream can commit an empty file.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const dir = pth.join(WEB_ROOT, "streams");
+    const file = pth.join(dir, "empty.txt");
+    await fsp.mkdir(dir, { recursive: true });
+    await streamClient.write(file, "not empty", "utf8");
+
+    const ws = await streamClient.createWriteStream(file);
+    ws.end();
+    await finished(ws);
+
+    const data = await streamClient.read(file, "utf8");
+    assert.strictEqual(data, "");
+
+    await streamClient.write(file, "rewritten", "utf8");
+    const nextData = await streamClient.read(file, "utf8");
+    assert.strictEqual(nextData, "rewritten");
+  });
+
+  await test("durable createWriteStream can commit an empty file.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
+    const dir = pth.join(WEB_ROOT, "streams", "durable-empty");
+    const file = pth.join(dir, "empty.txt");
+    await fsp.mkdir(dir, { recursive: true });
+    await streamClient.write(file, "not empty", "utf8");
+
+    const ws = await streamClient.createWriteStream(file);
+    ws.end();
+    await finished(ws);
+
+    const data = await streamClient.read(file, "utf8");
+    assert.strictEqual(data, "");
+
+    await streamClient.write(file, "rewritten", "utf8");
+    const nextData = await streamClient.read(file, "utf8");
+    assert.strictEqual(nextData, "rewritten");
+  });
+
+  await test("createWriteStream handles mixed Buffer and string chunks.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const dir = pth.join(WEB_ROOT, "streams");
+    const file = pth.join(dir, "mixed-chunks.txt");
+    await fsp.mkdir(dir, { recursive: true });
+
+    const ws = await streamClient.createWriteStream(file, "utf8");
+    ws.write(Buffer.from("hello", "utf8"));
+    ws.write(" ");
+    ws.write(Buffer.from("world", "utf8"));
+    ws.end("!");
+    await finished(ws);
+
+    const data = await streamClient.read(file, "utf8");
+    assert.strictEqual(data, "hello world!");
+  });
+
+  await test("durable createWriteStream handles mixed Buffer and string chunks.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
+    const dir = pth.join(WEB_ROOT, "streams", "durable-mixed-chunks");
+    const file = pth.join(dir, "mixed-chunks.txt");
+    await fsp.mkdir(dir, { recursive: true });
+
+    const ws = await streamClient.createWriteStream(file, "utf8");
+    ws.write(Buffer.from("hello", "utf8"));
+    ws.write(" ");
+    ws.write(Buffer.from("world", "utf8"));
+    ws.end("!");
+    await finished(ws);
+
+    const data = await streamClient.read(file, "utf8");
+    assert.strictEqual(data, "hello world!");
+  });
+
+  await test("createWriteStream honors configured default encoding.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const dir = pth.join(WEB_ROOT, "streams");
+    const file = pth.join(dir, "encoding.txt");
+    await fsp.mkdir(dir, { recursive: true });
+
+    const ws = await streamClient.createWriteStream(file, { encoding: "utf16le" });
+    ws.write("hello");
+    ws.end(" world");
+    await finished(ws);
+
+    const data = await streamClient.read(file, "utf16le");
+    assert.strictEqual(data, "hello world");
+  });
+
+  await test("durable createWriteStream honors configured default encoding.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
+    const dir = pth.join(WEB_ROOT, "streams", "durable-encoding");
+    const file = pth.join(dir, "encoding.txt");
+    await fsp.mkdir(dir, { recursive: true });
+
+    const ws = await streamClient.createWriteStream(file, { encoding: "utf16le" });
+    ws.write("hello");
+    ws.end(" world");
+    await finished(ws);
+
+    const data = await streamClient.read(file, "utf16le");
+    assert.strictEqual(data, "hello world");
+  });
+
+  await test("createWriteStream honors explicit per-write encodings.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const dir = pth.join(WEB_ROOT, "streams");
+    const file = pth.join(dir, "per-write-encoding.txt");
+    await fsp.mkdir(dir, { recursive: true });
+
+    const ws = await streamClient.createWriteStream(file, "utf8");
+    ws.write(Buffer.from("hello ", "utf8").toString("hex"), "hex");
+    ws.end(Buffer.from("world", "utf8").toString("base64"), "base64");
+    await finished(ws);
+
+    const data = await streamClient.read(file, "utf8");
+    assert.strictEqual(data, "hello world");
+  });
+
+  await test("durable createWriteStream honors explicit per-write encodings.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
+    const dir = pth.join(WEB_ROOT, "streams", "durable-per-write-encoding");
+    const file = pth.join(dir, "per-write-encoding.txt");
+    await fsp.mkdir(dir, { recursive: true });
+
+    const ws = await streamClient.createWriteStream(file, "utf8");
+    ws.write(Buffer.from("hello ", "utf8").toString("hex"), "hex");
+    ws.end(Buffer.from("world", "utf8").toString("base64"), "base64");
+    await finished(ws);
+
+    const data = await streamClient.read(file, "utf8");
+    assert.strictEqual(data, "hello world");
+  });
+
+  await test("createWriteStream releases the lock when stream creation fails before ready.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const dir = pth.join(WEB_ROOT, "streams", "open-error");
+    const file = pth.join(dir, "target.json");
+    await fsp.mkdir(dir, { recursive: true });
+
+    await assert.rejects(streamClient.createWriteStream(file, { flags: "r" }), /ENOENT|no such file/i);
+
+    await streamClient.write(file, JSON.stringify({ ok: true }));
+    const data = await streamClient.read(file, "utf8");
+    assert.strictEqual(data, JSON.stringify({ ok: true }));
+  });
+
+  await test("createWriteStream creates missing parent directories.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const dir = pth.join(WEB_ROOT, "streams", "nested", "a", "b");
+    const file = pth.join(dir, "data.json");
+    await fsp.rm(pth.join(WEB_ROOT, "streams", "nested"), { recursive: true, force: true });
+
+    const ws = await streamClient.createWriteStream(file);
+    ws.end(JSON.stringify({ ok: true }));
+    await finished(ws);
+
+    const data = await streamClient.read(file, "utf8");
+    assert.strictEqual(data, JSON.stringify({ ok: true }));
+  });
+
+  await test("durable createWriteStream creates missing parent directories.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
+    const dir = pth.join(WEB_ROOT, "streams", "durable-nested", "a", "b");
+    const file = pth.join(dir, "data.json");
+    await fsp.rm(pth.join(WEB_ROOT, "streams", "durable-nested"), { recursive: true, force: true });
+
+    const ws = await streamClient.createWriteStream(file);
+    ws.end(JSON.stringify({ ok: true }));
+    await finished(ws);
+
+    const data = await streamClient.read(file, "utf8");
+    assert.strictEqual(data, JSON.stringify({ ok: true }));
+  });
+
   await test("durable createWriteStream accepts string options.", async () => {
-    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true, errorHandler: () => {} });
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
     const dir = pth.join(WEB_ROOT, "streams", "durable");
     const file = pth.join(dir, "data.txt");
     await fsp.mkdir(dir, { recursive: true });
@@ -404,9 +1002,109 @@ await suite("Client (streams)", async () => {
     assert.strictEqual(data, "hello world");
   });
 
-  // await test("createWriteStream rejects unsupported stream options.", async () => {
-  //   const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), errorHandler: () => {} });
-  //   await assert.rejects(streamClient.createWriteStream("/tmp/write.json", { autoClose: false } as Parameters<typeof fs.createWriteStream>[1]), /autoClose/);
-  //   await assert.rejects(streamClient.createWriteStream("/tmp/write.json", { fd: 1 } as Parameters<typeof fs.createWriteStream>[1]), /options\.fd/);
-  // });
+  await test("mixed concurrent operations remain consistent under load.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const dir = pth.join(WEB_ROOT, "streams", "soak");
+    const file = pth.join(dir, "data.json");
+    await fsp.rm(dir, { recursive: true, force: true });
+    await fsp.mkdir(dir, { recursive: true });
+
+    const payloads = Array.from({ length: 13 }, (_, i) => JSON.stringify({ v: i }));
+    const committed = new Set(payloads);
+    await streamClient.write(file, payloads[0]);
+
+    const operations = payloads.slice(1).flatMap((payload, i) => {
+      const writeOp =
+        i % 2 === 0
+          ? (async () => {
+              await streamClient.write(file, payload);
+            })()
+          : (async () => {
+              const ws = await streamClient.createWriteStream(file, "utf8");
+              ws.end(payload);
+              await finished(ws);
+            })();
+
+      const readOp =
+        i % 2 === 0
+          ? (async () => {
+              const data = await streamClient.read(file, "utf8");
+              assert.strictEqual(committed.has(data), true);
+            })()
+          : (async () => {
+              const rs = await streamClient.createReadStream(file, "utf8");
+              const chunks: string[] = [];
+              rs.on("data", (chunk) => {
+                chunks.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8"));
+              });
+              await finished(rs);
+              const data = chunks.join("");
+              assert.strictEqual(committed.has(data), true);
+            })();
+
+      return [writeOp, readOp];
+    });
+
+    await Promise.all(operations);
+
+    const entries = await fsp.readdir(dir);
+    assert.deepStrictEqual(entries, ["data.json"]);
+
+    await streamClient.write(file, JSON.stringify({ v: "final" }));
+    const finalData = await streamClient.read(file, "utf8");
+    assert.strictEqual(finalData, JSON.stringify({ v: "final" }));
+  });
+
+  await test("durable mixed concurrent operations remain consistent under load.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
+    const dir = pth.join(WEB_ROOT, "streams", "durable-soak");
+    const file = pth.join(dir, "data.json");
+    await fsp.rm(dir, { recursive: true, force: true });
+    await fsp.mkdir(dir, { recursive: true });
+
+    const payloads = Array.from({ length: 9 }, (_, i) => JSON.stringify({ v: i }));
+    const committed = new Set(payloads);
+    await streamClient.write(file, payloads[0]);
+
+    const operations = payloads.slice(1).flatMap((payload, i) => {
+      const writeOp =
+        i % 2 === 0
+          ? (async () => {
+              await streamClient.write(file, payload);
+            })()
+          : (async () => {
+              const ws = await streamClient.createWriteStream(file, "utf8");
+              ws.end(payload);
+              await finished(ws);
+            })();
+
+      const readOp =
+        i % 2 === 0
+          ? (async () => {
+              const data = await streamClient.read(file, "utf8");
+              assert.strictEqual(committed.has(data), true);
+            })()
+          : (async () => {
+              const rs = await streamClient.createReadStream(file, "utf8");
+              const chunks: string[] = [];
+              rs.on("data", (chunk) => {
+                chunks.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8"));
+              });
+              await finished(rs);
+              const data = chunks.join("");
+              assert.strictEqual(committed.has(data), true);
+            })();
+
+      return [writeOp, readOp];
+    });
+
+    await Promise.all(operations);
+
+    const entries = await fsp.readdir(dir);
+    assert.deepStrictEqual(entries, ["data.json"]);
+
+    await streamClient.write(file, JSON.stringify({ v: "final" }));
+    const finalData = await streamClient.read(file, "utf8");
+    assert.strictEqual(finalData, JSON.stringify({ v: "final" }));
+  });
 });
