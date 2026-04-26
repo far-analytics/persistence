@@ -6,8 +6,30 @@ import * as crypto from "node:crypto";
 import { once } from "node:events";
 import { LockManager } from "./lock_manager.js";
 import { Abortable } from "node:events";
-import { WriteStreamOptions, ReadStreamOptions, WriteFileOptions } from "./types.js";
 import { WriteStream } from "./write_stream.js";
+
+export interface ClientReadStreamOptions {
+  end?: number | undefined;
+  flags?: string | undefined;
+  encoding?: BufferEncoding | undefined;
+  mode?: number | undefined;
+  start?: number | undefined;
+  signal?: AbortSignal | null | undefined;
+  highWaterMark?: number | undefined;
+}
+export interface ClientWriteStreamOptions {
+  flags?: string | undefined;
+  encoding?: BufferEncoding | undefined;
+  mode?: number | undefined;
+  start?: number | undefined;
+  signal?: AbortSignal | null | undefined;
+  highWaterMark?: number | undefined;
+}
+export type ClientWriteFileOptions = fs.ObjectEncodingOptions &
+  Abortable & {
+    mode?: fs.Mode | undefined;
+    flag?: string | undefined;
+  };
 
 export interface ClientOptions {
   manager: LockManager;
@@ -157,7 +179,7 @@ export class Client {
     }
   }
 
-  public async createReadStream(path: string, options?: ReadStreamOptions | BufferEncoding): Promise<fs.ReadStream> {
+  public async createReadStream(path: string, options?: ClientReadStreamOptions | BufferEncoding): Promise<fs.ReadStream> {
     if (!pth.isAbsolute(path)) {
       throw new Error("`path` must be absolute");
     }
@@ -189,7 +211,7 @@ export class Client {
     }
   }
 
-  public async write(path: string, data: Parameters<typeof fsp.writeFile>[1], options?: WriteFileOptions | BufferEncoding): Promise<void> {
+  public async write(path: string, data: Parameters<typeof fsp.writeFile>[1], options?: ClientWriteFileOptions | BufferEncoding): Promise<void> {
     if (!pth.isAbsolute(path)) {
       throw new Error("`path` must be absolute");
     }
@@ -259,7 +281,7 @@ export class Client {
     }
   }
 
-  public async createWriteStream(path: string, options?: WriteStreamOptions | BufferEncoding): Promise<WriteStream> {
+  public async createWriteStream(path: string, options?: ClientWriteStreamOptions | BufferEncoding): Promise<WriteStream> {
     if (!pth.isAbsolute(path)) {
       throw new Error("`path` must be absolute");
     }
