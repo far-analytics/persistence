@@ -176,7 +176,6 @@ _public_ **client.createReadStream(path, options?)**
   - flags `<string>` File system flags. **Default:** `"r"`
   - encoding `<string | null>` **Default:** `null`
   - mode `<integer>` **Default:** `0o666`
-  - emitClose `<boolean>` Emit `close` after destroy. See Node.js stream documentation.
   - start `<number>` Start offset.
   - end `<number>` End offset (inclusive).
   - signal `<AbortSignal>` Abort an in‑progress read.
@@ -193,7 +192,6 @@ _public_ **client.createWriteStream(path, options?)**
   - flags `<string>` File system flags. **Default:** `"w"`
   - encoding `<string>` **Default:** `"utf8"`
   - mode `<integer>` **Default:** `0o666`
-  - emitClose `<boolean>` Emit `close` after destroy. See Node.js stream documentation.
   - start `<number>` Start offset.
   - signal `<AbortSignal>` Abort an in‑progress write.
   - highWaterMark `<number>` Write buffer size.
