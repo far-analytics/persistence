@@ -191,7 +191,7 @@ Reads a file. All paths must be absolute.
 _public_ **client.createReadStream(path, options?)**
 
 - path `<string>` An absolute path to a file.
-- options `<ClientReadStreamOptions | BufferEncoding>`
+- options `<ClientCreateReadStreamOptions | BufferEncoding>`
   - flags `<string>` File system flags. **Default:** `"r"`
   - encoding `<string | null>` **Default:** `null`
   - mode `<integer>` **Default:** `0o666`
@@ -208,7 +208,7 @@ _public_ **client.write(path, data, options?)**
 
 - path `<string>` An absolute path to a file.
 - data `<string | Buffer | TypedArray | DataView | Iterable | AsyncIterable | Stream>` Data to write.
-- options `<ClientWriteFileOptions | BufferEncoding>`
+- options `<ClientWriteOptions | BufferEncoding>`
   - encoding `<string | null>` **Default:** `"utf8"`
   - mode `<integer>` **Default:** `0o666`
   - flag `<string>` **Default:** `"w"`
@@ -223,7 +223,7 @@ In durable mode, a rejection does not always mean the old file is still in place
 _public_ **client.createWriteStream(path, options?)**
 
 - path `<string>` An absolute path to a file.
-- options `<ClientWriteStreamOptions | BufferEncoding>`
+- options `<ClientCreateWriteStreamOptions | BufferEncoding>`
   - flags `<string>` File system flags. **Default:** `"w"`
   - encoding `<string>` **Default:** `"utf8"`
   - mode `<integer>` **Default:** `0o666`
