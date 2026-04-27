@@ -1086,6 +1086,7 @@ await suite("Client (streams)", async () => {
     assert.strictEqual(data, "hello world");
   });
 });
+
 await suite("Client (concurrent)", async () => {
   await test("Mixed concurrent operations remain consistent under load.", async () => {
     const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
