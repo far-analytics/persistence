@@ -1,10 +1,17 @@
 import * as stream from "node:stream";
 import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
-import { WriteStreamOptions } from "./types";
 import { LockManager } from "./lock_manager";
 import { finished } from "node:stream/promises";
+import { ClientWriteStreamOptions } from "./client";
 
+export interface WriteStreamOptions {
+  durable: boolean;
+  path: string;
+  dir: string;
+  id: number;
+  manager: LockManager;
+}
 export class WriteStream extends stream.Writable {
   protected tempPath: string;
   protected path: string;
@@ -14,7 +21,7 @@ export class WriteStream extends stream.Writable {
   protected id: number;
   public fsWriteStream: fs.WriteStream;
 
-  constructor(tempPath: string, options: WriteStreamOptions & { durable: boolean; path: string; dir: string; id: number; manager: LockManager }) {
+  constructor(tempPath: string, options: ClientWriteStreamOptions & WriteStreamOptions) {
     super({ highWaterMark: options.highWaterMark, defaultEncoding: options.encoding });
     this.tempPath = tempPath;
     this.path = options.path;
@@ -29,6 +36,7 @@ export class WriteStream extends stream.Writable {
       start: options.start,
       signal: options.signal,
       highWaterMark: options.highWaterMark,
+      flush: options.durable,
     });
     this.fsWriteStream.on("ready", () => this.emit("ready"));
     this.fsWriteStream.on("open", () => this.emit("open"));
@@ -63,17 +71,11 @@ export class WriteStream extends stream.Writable {
         await finished(this.fsWriteStream);
         await fsp.rename(this.tempPath, this.path);
         if (this.durable) {
-          const ffh = await fsp.open(this.path, "r");
+          const fh = await fsp.open(this.dir, "r");
           try {
-            await ffh.sync();
+            await fh.sync();
           } finally {
-            await ffh.close();
-          }
-          const dfh = await fsp.open(this.dir, "r");
-          try {
-            await dfh.sync();
-          } finally {
-            await dfh.close();
+            await fh.close();
           }
         }
         callback();
