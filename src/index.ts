@@ -9,10 +9,10 @@ import {
   ClientOptions,
   ClientReadBufferOptions,
   ClientReadOptions,
-  ClientReadStreamOptions,
+  ClientCreateReadStreamOptions,
   ClientReadStringOptions,
-  ClientWriteFileOptions,
-  ClientWriteStreamOptions,
+  ClientWriteOptions,
+  ClientCreateWriteStreamOptions,
 } from "./client.js";
 
 export {
@@ -29,9 +29,9 @@ export {
   WriteStreamOptions,
   ClientReadBufferOptions,
   ClientReadOptions,
-  ClientReadStreamOptions,
+  ClientCreateReadStreamOptions,
   ClientReadStringOptions,
-  ClientWriteStreamOptions,
-  ClientWriteFileOptions,
+  ClientCreateWriteStreamOptions,
+  ClientWriteOptions,
   ClientOptions,
 };

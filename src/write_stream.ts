@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import { LockManager } from "./lock_manager";
 import { finished } from "node:stream/promises";
-import { ClientWriteStreamOptions } from "./client";
+import { ClientCreateWriteStreamOptions } from "./client";
 
 export interface WriteStreamOptions {
   durable: boolean;
@@ -21,7 +21,7 @@ export class WriteStream extends stream.Writable {
   protected id: number;
   public fsWriteStream: fs.WriteStream;
 
-  constructor(tempPath: string, options: ClientWriteStreamOptions & WriteStreamOptions) {
+  constructor(tempPath: string, options: ClientCreateWriteStreamOptions & WriteStreamOptions) {
     super({ highWaterMark: options.highWaterMark, defaultEncoding: options.encoding });
     this.tempPath = tempPath;
     this.path = options.path;
