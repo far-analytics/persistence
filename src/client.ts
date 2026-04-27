@@ -31,6 +31,45 @@ export type ClientWriteFileOptions = fs.ObjectEncodingOptions &
     flag?: string | undefined;
   };
 
+export interface ClientCollectDirentOptions {
+  encoding: "buffer";
+  withFileTypes: true;
+  recursive?: boolean;
+}
+
+export type ClientCollectStringOptions =
+  | {
+      encoding: Exclude<BufferEncoding, "buffer">;
+      withFileTypes?: false;
+      recursive?: boolean;
+    }
+  | Exclude<BufferEncoding, "buffer">
+  | null;
+
+export interface ClientCollectBufferOptions {
+  encoding: "buffer";
+  withFileTypes?: false;
+  recursive?: boolean;
+}
+
+export type ClientCollectOptions = ClientCollectDirentOptions | ClientCollectStringOptions | ClientCollectBufferOptions;
+
+export type ClientReadStringOptions =
+  | ({
+      encoding: BufferEncoding;
+      flag?: fs.OpenMode | undefined;
+    } & Abortable)
+  | BufferEncoding;
+
+export type ClientReadBufferOptions =
+  | ({
+      encoding?: null | undefined;
+      flag?: fs.OpenMode | undefined;
+    } & Abortable)
+  | null;
+
+export type ClientReadOptions = ClientReadStringOptions | ClientReadBufferOptions;
+
 export interface ClientOptions {
   manager: LockManager;
   durable?: boolean;
@@ -44,54 +83,10 @@ export class Client {
     this.durable = durable ?? false;
   }
 
-  public collect(
-    path: string,
-    options: {
-      encoding: "buffer";
-      withFileTypes: true;
-      recursive?: boolean;
-    }
-  ): Promise<fs.Dirent<NonSharedBuffer>[]>;
-  public collect(
-    path: string,
-    options?:
-      | {
-          encoding: Exclude<BufferEncoding, "buffer">;
-          withFileTypes?: false;
-          recursive?: boolean;
-        }
-      | Exclude<BufferEncoding, "buffer">
-      | null
-  ): Promise<string[]>;
-  public collect(
-    path: string,
-    options: {
-      encoding: "buffer";
-      withFileTypes?: false;
-      recursive?: boolean;
-    }
-  ): Promise<NonSharedBuffer[]>;
-  public async collect(
-    path: string,
-    options?:
-      | {
-          encoding: "buffer";
-          withFileTypes: true;
-          recursive?: boolean;
-        }
-      | {
-          encoding: Exclude<BufferEncoding, "buffer">;
-          withFileTypes?: false;
-          recursive?: boolean;
-        }
-      | {
-          encoding: "buffer";
-          withFileTypes?: false;
-          recursive?: boolean;
-        }
-      | Exclude<BufferEncoding, "buffer">
-      | null
-  ): Promise<string[] | fs.Dirent<NonSharedBuffer>[] | NonSharedBuffer[]> {
+  public collect(path: string, options: ClientCollectDirentOptions): Promise<fs.Dirent<NonSharedBuffer>[]>;
+  public collect(path: string, options?: ClientCollectStringOptions): Promise<string[]>;
+  public collect(path: string, options: ClientCollectBufferOptions): Promise<NonSharedBuffer[]>;
+  public async collect(path: string, options?: ClientCollectOptions): Promise<string[] | fs.Dirent<NonSharedBuffer>[] | NonSharedBuffer[]> {
     if (!pth.isAbsolute(path)) {
       throw new Error("`path` must be absolute");
     }
@@ -110,7 +105,7 @@ export class Client {
     }
   }
 
-  public async delete(path: string, options?: Parameters<typeof fsp.rm>[1]): Promise<void> {
+  public async delete(path: string, options?: fs.RmOptions): Promise<void> {
     if (!pth.isAbsolute(path)) {
       throw new Error("`path` must be absolute");
     }
@@ -135,38 +130,9 @@ export class Client {
     }
   }
 
-  public read(
-    path: string,
-    options:
-      | ({
-          encoding: BufferEncoding;
-          flag?: fs.OpenMode | undefined;
-        } & Abortable)
-      | BufferEncoding
-  ): Promise<string>;
-  public read(
-    path: string,
-    options?:
-      | ({
-          encoding?: null | undefined;
-          flag?: fs.OpenMode | undefined;
-        } & Abortable)
-      | null
-  ): Promise<NonSharedBuffer>;
-  public async read(
-    path: string,
-    options?:
-      | ({
-          encoding: BufferEncoding;
-          flag?: fs.OpenMode | undefined;
-        } & Abortable)
-      | ({
-          encoding?: null | undefined;
-          flag?: fs.OpenMode | undefined;
-        } & Abortable)
-      | null
-      | BufferEncoding
-  ): Promise<string | NonSharedBuffer> {
+  public read(path: string, options: ClientReadStringOptions): Promise<string>;
+  public read(path: string, options?: ClientReadBufferOptions): Promise<NonSharedBuffer>;
+  public async read(path: string, options?: ClientReadOptions): Promise<string | NonSharedBuffer> {
     if (!pth.isAbsolute(path)) {
       throw new Error("`path` must be absolute");
     }
