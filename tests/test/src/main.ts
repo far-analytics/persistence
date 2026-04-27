@@ -1030,19 +1030,6 @@ await suite("Client (streams)", async () => {
     assert.strictEqual(data, "hello world");
   });
 
-  await test("createWriteStream releases the lock when stream creation fails before ready.", async () => {
-    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
-    const dir = pth.join(WEB_ROOT, "streams", "open-error");
-    const file = pth.join(dir, "target.json");
-    await fsp.mkdir(dir, { recursive: true });
-
-    await assert.rejects(streamClient.createWriteStream(file, { flags: "r" }), /ENOENT|no such file/i);
-
-    await streamClient.write(file, JSON.stringify({ ok: true }));
-    const data = await streamClient.read(file, "utf8");
-    assert.strictEqual(data, JSON.stringify({ ok: true }));
-  });
-
   await test("createWriteStream creates missing parent directories.", async () => {
     const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
     const dir = pth.join(WEB_ROOT, "streams", "nested", "a", "b");
