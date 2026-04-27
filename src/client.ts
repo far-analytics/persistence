@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-deprecated */
 import * as fsp from "node:fs/promises";
 import * as fs from "node:fs";
 import * as pth from "node:path";
@@ -83,10 +82,10 @@ export class Client {
     this.durable = durable ?? false;
   }
 
-  public collect(path: string, options: ClientCollectDirentOptions): Promise<fs.Dirent<NonSharedBuffer>[]>;
+  public collect(path: string, options: ClientCollectDirentOptions): Promise<fs.Dirent<Buffer<ArrayBuffer>>[]>;
   public collect(path: string, options?: ClientCollectStringOptions): Promise<string[]>;
-  public collect(path: string, options: ClientCollectBufferOptions): Promise<NonSharedBuffer[]>;
-  public async collect(path: string, options?: ClientCollectOptions): Promise<string[] | fs.Dirent<NonSharedBuffer>[] | NonSharedBuffer[]> {
+  public collect(path: string, options: ClientCollectBufferOptions): Promise<Buffer<ArrayBuffer>[]>;
+  public async collect(path: string, options?: ClientCollectOptions): Promise<string[] | fs.Dirent<Buffer<ArrayBuffer>>[] | Buffer<ArrayBuffer>[]> {
     if (!pth.isAbsolute(path)) {
       throw new Error("`path` must be absolute");
     }
@@ -131,8 +130,8 @@ export class Client {
   }
 
   public read(path: string, options: ClientReadStringOptions): Promise<string>;
-  public read(path: string, options?: ClientReadBufferOptions): Promise<NonSharedBuffer>;
-  public async read(path: string, options?: ClientReadOptions): Promise<string | NonSharedBuffer> {
+  public read(path: string, options?: ClientReadBufferOptions): Promise<Buffer<ArrayBuffer>>;
+  public async read(path: string, options?: ClientReadOptions): Promise<string | Buffer<ArrayBuffer>> {
     if (!pth.isAbsolute(path)) {
       throw new Error("`path` must be absolute");
     }
