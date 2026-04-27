@@ -137,21 +137,30 @@ Whether durability mode is enabled for the client.
 _public_ **client.collect(path, options)**
 
 - path `<string>` An absolute path to a directory.
-- options `<{ encoding: "buffer"; withFileTypes: true; recursive?: boolean }>` Optional. Enables `Dirent` output with `NonSharedBuffer` names.
+- options `<ClientCollectDirentOptions>`
+  - encoding `<"buffer">`
+  - withFileTypes `<true>` Enables `Dirent` output with `NonSharedBuffer` names.
+  - recursive `<boolean>` Optional.
 
 Returns: `<Promise<Array<fs.Dirent<NonSharedBuffer>>>>`
 
 _public_ **client.collect(path, options?)**
 
 - path `<string>` An absolute path to a directory.
-- options `<{ encoding: Exclude<BufferEncoding, "buffer">; withFileTypes?: false; recursive?: boolean } | Exclude<BufferEncoding, "buffer"> | null>` Optional.
+- options `<ClientCollectStringOptions>`
+  - encoding `<BufferEncoding>` Optional. Defaults to UTF-8 string output when omitted.
+  - withFileTypes `<false>` Optional.
+  - recursive `<boolean>` Optional.
 
 Returns: `<Promise<Array<string>>>`
 
 _public_ **client.collect(path, options)**
 
 - path `<string>` An absolute path to a directory.
-- options `<{ encoding: "buffer"; withFileTypes?: false; recursive?: boolean }>` Optional.
+- options `<ClientCollectBufferOptions>`
+  - encoding `<"buffer">`
+  - withFileTypes `<false>` Optional.
+  - recursive `<boolean>` Optional.
 
 Returns: `<Promise<Array<NonSharedBuffer>>>`
 
@@ -160,14 +169,20 @@ Lists the entries in a directory. All paths must be absolute.
 _public_ **client.read(path, options)**
 
 - path `<string>` An absolute path to a file.
-- options `<{ encoding: BufferEncoding; flag?: fs.OpenMode } & Abortable | BufferEncoding>` Read as text with the specified encoding.
+- options `<ClientReadStringOptions>`
+  - encoding `<BufferEncoding>` Read as text with the specified encoding.
+  - flag `<fs.OpenMode>` Optional.
+  - signal `<AbortSignal>` Abort an in-progress read.
 
 Returns: `<Promise<string>>`
 
 _public_ **client.read(path, options?)**
 
 - path `<string>` An absolute path to a file.
-- options `<{ encoding?: null; flag?: fs.OpenMode } & Abortable | null>` Optional.
+- options `<ClientReadBufferOptions>`
+  - encoding `<null>` Optional. Reads raw bytes when omitted or `null`.
+  - flag `<fs.OpenMode>` Optional.
+  - signal `<AbortSignal>` Abort an in-progress read.
 
 Returns: `<Promise<NonSharedBuffer>>`
 
@@ -176,7 +191,7 @@ Reads a file. All paths must be absolute.
 _public_ **client.createReadStream(path, options?)**
 
 - path `<string>` An absolute path to a file.
-- options `<Object>` Optional `createReadStream` options.
+- options `<ClientReadStreamOptions | BufferEncoding>`
   - flags `<string>` File system flags. **Default:** `"r"`
   - encoding `<string | null>` **Default:** `null`
   - mode `<integer>` **Default:** `0o666`
@@ -193,7 +208,7 @@ _public_ **client.write(path, data, options?)**
 
 - path `<string>` An absolute path to a file.
 - data `<string | Buffer | TypedArray | DataView | Iterable | AsyncIterable | Stream>` Data to write.
-- options `<Object | BufferEncoding>` Optional `writeFile` options.
+- options `<ClientWriteFileOptions | BufferEncoding>`
   - encoding `<string | null>` **Default:** `"utf8"`
   - mode `<integer>` **Default:** `0o666`
   - flag `<string>` **Default:** `"w"`
@@ -208,7 +223,7 @@ In durable mode, a rejection does not always mean the old file is still in place
 _public_ **client.createWriteStream(path, options?)**
 
 - path `<string>` An absolute path to a file.
-- options `<Object | BufferEncoding>` Optional write stream options.
+- options `<ClientWriteStreamOptions | BufferEncoding>`
   - flags `<string>` File system flags. **Default:** `"w"`
   - encoding `<string>` **Default:** `"utf8"`
   - mode `<integer>` **Default:** `0o666`
@@ -231,7 +246,7 @@ Notes:
 _public_ **client.delete(path, options?)**
 
 - path `<string>` An absolute path to a file or directory.
-- options `<Object>` Optional `rm` options.
+- options `<fs.RmOptions>`
   - recursive `<boolean>` **Default:** `false`
   - force `<boolean>` **Default:** `false`
   - maxRetries `<number>` **Default:** `0`
