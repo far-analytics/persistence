@@ -1,7 +1,7 @@
 {
   "name": "@far-analytics/persistence",
   "version": "1.8.0",
-  "description": "A persistent storage layer.",
+  "description": "A filesystem-backed persistence layer with hierarchical RW locking, atomic-style writes, and optional durability.",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
