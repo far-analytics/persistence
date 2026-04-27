@@ -211,7 +211,6 @@ _public_ **client.write(path, data, options?)**
 - options `<ClientWriteOptions | BufferEncoding>`
   - encoding `<string | null>` **Default:** `"utf8"`
   - mode `<integer>` **Default:** `0o666`
-  - flag `<string>` **Default:** `"w"`
   - signal `<AbortSignal>` Abort an in‑progress write.
 
 Returns: `<Promise<void>>`
@@ -224,10 +223,8 @@ _public_ **client.createWriteStream(path, options?)**
 
 - path `<string>` An absolute path to a file.
 - options `<ClientCreateWriteStreamOptions | BufferEncoding>`
-  - flags `<string>` File system flags. **Default:** `"w"`
   - encoding `<string>` **Default:** `"utf8"`
   - mode `<integer>` **Default:** `0o666`
-  - start `<number>` Start offset.
   - signal `<AbortSignal>` Abort an in‑progress write.
   - highWaterMark `<number>` Write buffer size.
 
