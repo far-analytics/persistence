@@ -16,18 +16,17 @@ export interface ClientCreateReadStreamOptions {
   signal?: AbortSignal | null | undefined;
   highWaterMark?: number | undefined;
 }
+
 export interface ClientCreateWriteStreamOptions {
-  flags?: string | undefined;
   encoding?: BufferEncoding | undefined;
   mode?: number | undefined;
-  start?: number | undefined;
   signal?: AbortSignal | null | undefined;
   highWaterMark?: number | undefined;
 }
+
 export type ClientWriteOptions = fs.ObjectEncodingOptions &
   Abortable & {
     mode?: fs.Mode | undefined;
-    flag?: string | undefined;
   };
 
 export interface ClientCollectDirentOptions {
@@ -180,7 +179,10 @@ export class Client {
     if (!pth.isAbsolute(path)) {
       throw new Error("`path` must be absolute");
     }
-    const writeFileOptions = typeof options == "string" ? { encoding: options, flush: this.durable } : { ...options, ...{ flush: this.durable } };
+    const writeFileOptions =
+      typeof options == "string"
+        ? { encoding: options, flush: this.durable }
+        : { ...{ encoding: options?.encoding, mode: options?.mode, signal: options?.signal }, ...{ flush: this.durable } };
     path = pth.resolve(path);
     const id = await this.manager.acquire(path, "write");
     try {
@@ -252,8 +254,14 @@ export class Client {
     }
     path = pth.resolve(path);
     const dir = pth.dirname(path);
-
     const id = await this.manager.acquire(path, "write");
+    const writeStreamOptions =
+      typeof options == "string"
+        ? { encoding: options, durable: this.durable, path, dir, id, manager: this.manager }
+        : {
+            ...{ highWaterMark: options?.highWaterMark, encoding: options?.encoding, mode: options?.mode, signal: options?.signal },
+            ...{ durable: this.durable, path, dir, id, manager: this.manager },
+          };
     try {
       if (this.durable) {
         const parsed = pth.parse(path);
@@ -281,13 +289,8 @@ export class Client {
       } else {
         await fsp.mkdir(dir, { recursive: true });
       }
-
       const tempFile = `.${crypto.randomUUID()}`;
       const tempPath = pth.join(dir, tempFile);
-      const writeStreamOptions =
-        typeof options == "string"
-          ? { encoding: options, durable: this.durable, path, dir, id, manager: this.manager }
-          : { ...options, ...{ durable: this.durable, path, dir, id, manager: this.manager } };
       const writeStream = new WriteStream(tempPath, writeStreamOptions);
       await once(writeStream, "ready");
       return writeStream;

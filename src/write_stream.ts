@@ -30,10 +30,8 @@ export class WriteStream extends stream.Writable {
     this.manager = options.manager;
     this.id = options.id;
     this.fsWriteStream = fs.createWriteStream(tempPath, {
-      flags: options.flags,
       encoding: options.encoding,
       mode: options.mode,
-      start: options.start,
       signal: options.signal,
       highWaterMark: options.highWaterMark,
       flush: options.durable,
