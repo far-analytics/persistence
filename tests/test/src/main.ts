@@ -371,7 +371,7 @@ await suite("Client (write)", async () => {
     assert.strictEqual(data, "ok");
   });
 
-  await test("durable write reports directory sync failure after rename and releases the lock.", async () => {
+  await test("Durable write reports directory sync failure after rename and releases the lock.", async () => {
     const writeClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
     const dir = pth.join(WEB_ROOT, "durable-write-sync-error");
     const path = pth.join(dir, "target.json");
@@ -379,10 +379,7 @@ await suite("Client (write)", async () => {
     await writeClient.write(path, JSON.stringify({ v: 1 }));
 
     await withFailingSyncOnOpen(dir, new Error("Injected directory sync failure"), async () => {
-      await assert.rejects(
-        writeClient.write(path, JSON.stringify({ v: 2 }), "utf8"),
-        /Injected directory sync failure/
-      );
+      await assert.rejects(writeClient.write(path, JSON.stringify({ v: 2 }), "utf8"), /Injected directory sync failure/);
     });
 
     const readData = await writeClient.read(path, "utf8");
@@ -393,7 +390,7 @@ await suite("Client (write)", async () => {
     assert.strictEqual(nextData, JSON.stringify({ v: 3 }));
   });
 
-  await test("durable write preserves the existing target and releases the lock when commit fails.", async () => {
+  await test("Durable write preserves the existing target and releases the lock when commit fails.", async () => {
     const writeClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
     const dir = pth.join(WEB_ROOT, "durable-write");
     const path = pth.join(dir, "target");
@@ -458,7 +455,7 @@ await suite("Client (streams)", async () => {
     assert.deepStrictEqual(entries, ["data.json"]);
   });
 
-  await test("durable createWriteStream finish means the file is already committed.", async () => {
+  await test("Durable createWriteStream finish means the file is already committed.", async () => {
     const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
     const dir = pth.join(WEB_ROOT, "streams", "durable-finish-commit");
     const file = pth.join(dir, "data.json");
@@ -644,7 +641,7 @@ await suite("Client (streams)", async () => {
     assert.strictEqual(data, JSON.stringify({ ok: true }));
   });
 
-  await test("equivalent normalized paths share the same lock.", async () => {
+  await test("Equivalent normalized paths share the same lock.", async () => {
     const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
     const dir = pth.join(WEB_ROOT, "streams", "normalized-paths");
     const file = pth.join(dir, "data.json");
@@ -710,7 +707,7 @@ await suite("Client (streams)", async () => {
     assert.strictEqual(nextData, JSON.stringify({ v: 2 }));
   });
 
-  await test("durable createWriteStream abort signal preserves existing data and releases the lock.", async () => {
+  await test("Durable createWriteStream abort signal preserves existing data and releases the lock.", async () => {
     const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
     const dir = pth.join(WEB_ROOT, "streams", "durable-abort-signal");
     const file = pth.join(dir, "abort.json");
@@ -749,7 +746,7 @@ await suite("Client (streams)", async () => {
     assert.strictEqual(nextData, JSON.stringify({ ok: false }));
   });
 
-  await test("durable createWriteStream ignores unsupported JS-only options and releases the lock.", async () => {
+  await test("Durable createWriteStream ignores unsupported JS-only options and releases the lock.", async () => {
     const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
     const dir = pth.join(WEB_ROOT, "streams", "durable-write-options");
     const file = pth.join(dir, "data.json");
@@ -796,7 +793,7 @@ await suite("Client (streams)", async () => {
     assert.strictEqual(nextData, JSON.stringify({ v: 3 }));
   });
 
-  await test("durable createWriteStream early close preserves existing data, cleans temp files, and releases the lock.", async () => {
+  await test("Durable createWriteStream early close preserves existing data, cleans temp files, and releases the lock.", async () => {
     const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
     const dir = pth.join(WEB_ROOT, "streams", "durable-abort");
     const file = pth.join(dir, "error.json");
@@ -819,7 +816,7 @@ await suite("Client (streams)", async () => {
     assert.strictEqual(nextData, JSON.stringify({ v: 2 }));
   });
 
-  await test("durable createWriteStream preserves existing data when commit fails after temp write.", async () => {
+  await test("Durable createWriteStream preserves existing data when commit fails after temp write.", async () => {
     const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
     const dir = pth.join(WEB_ROOT, "streams", "durable-commit-error");
     const file = pth.join(dir, "data.json");
@@ -851,37 +848,7 @@ await suite("Client (streams)", async () => {
     assert.strictEqual(nextData, JSON.stringify({ v: 3 }));
   });
 
-  await test("durable createWriteStream reports file sync failures after rename and releases the lock.", async () => {
-    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
-    const dir = pth.join(WEB_ROOT, "streams", "durable-file-sync-error");
-    const file = pth.join(dir, "data.json");
-    await fsp.mkdir(dir, { recursive: true });
-    await streamClient.write(file, JSON.stringify({ v: 1 }));
-
-    await withFailingSyncOnOpen(file, new Error("Injected file sync failure"), async () => {
-      const ws = await streamClient.createWriteStream(file);
-      ws.end(JSON.stringify({ v: 2 }));
-
-      await finished(ws).then(
-        () => {
-          throw new Error("Expected durable createWriteStream to fail during file sync");
-        },
-        () => {}
-      );
-    });
-
-    const entries = await fsp.readdir(dir);
-    assert.deepStrictEqual(entries, ["data.json"]);
-
-    const readData = await streamClient.read(file, "utf8");
-    assert.strictEqual(readData, JSON.stringify({ v: 2 }));
-
-    await streamClient.write(file, JSON.stringify({ v: 3 }));
-    const nextData = await streamClient.read(file, "utf8");
-    assert.strictEqual(nextData, JSON.stringify({ v: 3 }));
-  });
-
-  await test("durable createWriteStream reports directory sync failures after rename and releases the lock.", async () => {
+  await test("Durable createWriteStream reports directory sync failures after rename and releases the lock.", async () => {
     const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
     const dir = pth.join(WEB_ROOT, "streams", "durable-directory-sync-error");
     const file = pth.join(dir, "data.json");
@@ -950,7 +917,7 @@ await suite("Client (streams)", async () => {
     assert.strictEqual(nextData, "rewritten");
   });
 
-  await test("durable createWriteStream can commit an empty file.", async () => {
+  await test("Durable createWriteStream can commit an empty file.", async () => {
     const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
     const dir = pth.join(WEB_ROOT, "streams", "durable-empty");
     const file = pth.join(dir, "empty.txt");
@@ -986,7 +953,7 @@ await suite("Client (streams)", async () => {
     assert.strictEqual(data, "hello world!");
   });
 
-  await test("durable createWriteStream handles mixed Buffer and string chunks.", async () => {
+  await test("Durable createWriteStream handles mixed Buffer and string chunks.", async () => {
     const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
     const dir = pth.join(WEB_ROOT, "streams", "durable-mixed-chunks");
     const file = pth.join(dir, "mixed-chunks.txt");
@@ -1018,7 +985,7 @@ await suite("Client (streams)", async () => {
     assert.strictEqual(data, "hello world");
   });
 
-  await test("durable createWriteStream honors configured default encoding.", async () => {
+  await test("Durable createWriteStream honors configured default encoding.", async () => {
     const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
     const dir = pth.join(WEB_ROOT, "streams", "durable-encoding");
     const file = pth.join(dir, "encoding.txt");
@@ -1048,7 +1015,7 @@ await suite("Client (streams)", async () => {
     assert.strictEqual(data, "hello world");
   });
 
-  await test("durable createWriteStream honors explicit per-write encodings.", async () => {
+  await test("Durable createWriteStream honors explicit per-write encodings.", async () => {
     const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
     const dir = pth.join(WEB_ROOT, "streams", "durable-per-write-encoding");
     const file = pth.join(dir, "per-write-encoding.txt");
@@ -1090,7 +1057,7 @@ await suite("Client (streams)", async () => {
     assert.strictEqual(data, JSON.stringify({ ok: true }));
   });
 
-  await test("durable createWriteStream creates missing parent directories.", async () => {
+  await test("Durable createWriteStream creates missing parent directories.", async () => {
     const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
     const dir = pth.join(WEB_ROOT, "streams", "durable-nested", "a", "b");
     const file = pth.join(dir, "data.json");
@@ -1104,7 +1071,7 @@ await suite("Client (streams)", async () => {
     assert.strictEqual(data, JSON.stringify({ ok: true }));
   });
 
-  await test("durable createWriteStream accepts string options.", async () => {
+  await test("Durable createWriteStream accepts string options.", async () => {
     const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
     const dir = pth.join(WEB_ROOT, "streams", "durable");
     const file = pth.join(dir, "data.txt");
@@ -1119,7 +1086,7 @@ await suite("Client (streams)", async () => {
     assert.strictEqual(data, "hello world");
   });
 
-  await test("mixed concurrent operations remain consistent under load.", async () => {
+  await test("Mixed concurrent operations remain consistent under load.", async () => {
     const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
     const dir = pth.join(WEB_ROOT, "streams", "soak");
     const file = pth.join(dir, "data.json");
@@ -1172,7 +1139,7 @@ await suite("Client (streams)", async () => {
     assert.strictEqual(finalData, JSON.stringify({ v: "final" }));
   });
 
-  await test("durable mixed concurrent operations remain consistent under load.", async () => {
+  await test("Durable mixed concurrent operations remain consistent under load.", async () => {
     const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
     const dir = pth.join(WEB_ROOT, "streams", "durable-soak");
     const file = pth.join(dir, "data.json");
