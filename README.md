@@ -173,7 +173,6 @@ _public_ **client.read(path, options)**
 - path `<string>` An absolute path to a file.
 - options `<ClientReadStringOptions>`
   - encoding `<BufferEncoding>` Read as text with the specified encoding.
-  - flag `<fs.OpenMode>` Optional.
   - signal `<AbortSignal>` Abort an in-progress read.
 
 Returns: `<Promise<string>>`
@@ -183,7 +182,6 @@ _public_ **client.read(path, options?)**
 - path `<string>` An absolute path to a file.
 - options `<ClientReadBufferOptions>`
   - encoding `<null>` Optional. Reads raw bytes when omitted or `null`.
-  - flag `<fs.OpenMode>` Optional.
   - signal `<AbortSignal>` Abort an in-progress read.
 
 Returns: `<Promise<NonSharedBuffer>>`
@@ -194,7 +192,6 @@ _public_ **client.createReadStream(path, options?)**
 
 - path `<string>` An absolute path to a file.
 - options `<ClientCreateReadStreamOptions | BufferEncoding>`
-  - flags `<string>` File system flags. **Default:** `"r"`
   - encoding `<string | null>` **Default:** `null`
   - mode `<integer>` **Default:** `0o666`
   - start `<number>` Start offset.
@@ -240,7 +237,7 @@ Notes:
 - On success, `finish` means the write has been committed.
 - In durable mode, the parent directory is fsync'd after rename.
 - If that post-rename fsync fails in durable mode, the stream rejects even though the target path may already contain the new data.
-- The lock is held for the entire stream lifetime, so long-running writes will block **conflicting** operations.
+- The lock is held for the entire stream lifetime, so long-running writes will block **_conflicting_** operations.
 
 _public_ **client.delete(path, options?)**
 
