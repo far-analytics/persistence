@@ -6,7 +6,7 @@ In this example you will use Persistence in order to read, write, stream, and li
 
 ## Implement the example
 
-### Implement the `main.ts` module
+### Implement the `main.js` module
 
 #### Import `Client` and `LockManager`.
 
@@ -63,19 +63,13 @@ git clone https://github.com/far-analytics/persistence.git
 #### Change directory into the example.
 
 ```bash
-cd persistence/examples/example
+cd persistence/examples/example-nodejs
 ```
 
 #### Install the example dependencies.
 
 ```bash
 npm install
-```
-
-#### Build the application.
-
-```bash
-npm run clean:build
 ```
 
 #### Run the application.
