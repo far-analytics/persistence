@@ -109,9 +109,9 @@ Persistence supports atomic-style file replacement via temp file + rename for `w
 - The directory structure that Persistence operates on is assumed to be hierarchical.
 - Hence, symlinks/aliases are not supported.
 - Filesystem root-path operations are restricted: `client.collect(root)` is supported, but `client.read(root)`, `client.createReadStream(root)`, `client.write(root)`, `client.createWriteStream(root)`, and `client.delete(root)` are not.
-- When durability is enabled, fsync on directories is considered best‑effort and behaves differently on different filesystems.
 - Distributed locking or coordination across multiple independent `LockManager` instances is not supported.
 - Protection against external processes that bypass the client and write directly to disk.
+- When durability is enabled, fsync on directories is considered best‑effort and behaves differently on different filesystems.
 - Durability operations have been tested on Linux on ext4; however, fsync may throw `EPERM` on Windows on NTFS.
 
 ## Planned
