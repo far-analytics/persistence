@@ -20,12 +20,12 @@ console.log(entries); // ['example.json']
 await client.delete("/tmp/example.json");
 
 // Create a write stream and write to a file
-const ws = await client.createWriteStream("/tmp/example.json");
-ws.write(JSON.stringify({ message: "Streaming Hello, World!" }) + "\n");
-ws.end();
-await once(ws, "finish");
+const writeStream = await client.createWriteStream("/tmp/example.json");
+writeStream.write(JSON.stringify({ message: "Streaming Hello, World!" }) + "\n");
+writeStream.end();
+await once(writeStream, "finish");
 
 // Create a read stream and read from a file
-const rs = await client.createReadStream("/tmp/example.json");
-rs.pipe(process.stdout); // {"message":"Streaming Hello, World!"}
-await once(rs, "close");
+const readStream = await client.createReadStream("/tmp/example.json");
+readStream.pipe(process.stdout); // {"message":"Streaming Hello, World!"}
+await once(readStream, "close");
