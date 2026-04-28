@@ -1,0 +1,21 @@
+{
+  "name": "example-nodejs",
+  "version": "1.0.0",
+  "description": "Example - Node.js",
+  "main": "./src/main.js",
+  "scripts": {
+    "lint": "npx eslint .",
+    "format": "npx prettier --write .",
+    "format:lint": "npm run format && npm run lint",
+    "start": "node --expose-gc ."
+  },
+  "author": "FAR",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.20.4"
+  },
+  "dependencies": {
+    "@far-analytics/persistence": "^1.0.0"
+  },
+  "type": "module"
+}
