@@ -34,7 +34,6 @@ export class LockManager {
   public acquire = async (path: string, type: "read" | "write" | "collect" | "delete"): Promise<number> => {
     const acquireId = this.id++;
     try {
-      path = pth.resolve(path);
       const artifacts: Artifacts = this.collectArtifacts(path, type);
       switch (type) {
         case "read":
@@ -122,7 +121,11 @@ export class LockManager {
 
   protected collectArtifacts = (path: string, type: "read" | "write" | "collect" | "delete"): Artifacts => {
     const locks: Promise<unknown>[] = [];
+    path = pth.resolve(path);
     const root = pth.parse(path).root;
+    if (path == root && (type == "read" || type == "write" || type == "delete")) {
+      throw new Error("Read, write, and delete operations on root are not supported.");
+    }
     switch (type) {
       case "read":
       case "collect": {
@@ -130,20 +133,18 @@ export class LockManager {
         if (node.writeTail) {
           locks.push(node.writeTail);
         }
-        if (path !== root) {
-          const segments = path.split(pth.sep).slice(1);
-          for (const segment of segments) {
-            let child = node.children.get(segment);
-            if (!child) {
-              child = { segment, parent: node, children: new Map(), writeTail: null, readTail: null };
-              node.children.set(segment, child);
-              node = child;
-            } else {
-              if (child.writeTail) {
-                locks.push(child.writeTail);
-              }
-              node = child;
+        const segments = path == root ? [root] : [root, ...path.slice(root.length).split(pth.sep)];
+        for (const segment of segments) {
+          let child = node.children.get(segment);
+          if (!child) {
+            child = { segment, parent: node, children: new Map(), writeTail: null, readTail: null };
+            node.children.set(segment, child);
+            node = child;
+          } else {
+            if (child.writeTail) {
+              locks.push(child.writeTail);
             }
+            node = child;
           }
         }
 
@@ -168,23 +169,21 @@ export class LockManager {
         if (node.readTail) {
           locks.push(node.readTail);
         }
-        if (path !== root) {
-          const segments = path.split(pth.sep).slice(1);
-          for (const segment of segments) {
-            let child = node.children.get(segment);
-            if (!child) {
-              child = { segment, parent: node, children: new Map(), writeTail: null, readTail: null };
-              node.children.set(segment, child);
-              node = child;
-            } else {
-              if (child.writeTail) {
-                locks.push(child.writeTail);
-              }
-              if (child.readTail) {
-                locks.push(child.readTail);
-              }
-              node = child;
+        const segments = [root, ...path.slice(root.length).split(pth.sep)];
+        for (const segment of segments) {
+          let child = node.children.get(segment);
+          if (!child) {
+            child = { segment, parent: node, children: new Map(), writeTail: null, readTail: null };
+            node.children.set(segment, child);
+            node = child;
+          } else {
+            if (child.writeTail) {
+              locks.push(child.writeTail);
             }
+            if (child.readTail) {
+              locks.push(child.readTail);
+            }
+            node = child;
           }
         }
 
