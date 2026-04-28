@@ -112,7 +112,7 @@ Persistence supports atomic-style file replacement via temp file + rename for `w
 - When durability is enabled, fsync on directories is considered best‑effort and behaves differently on different filesystems.
 - Distributed locking or coordination across multiple independent `LockManager` instances is not supported.
 - Protection against external processes that bypass the client and write directly to disk.
-- Durability operations may throw `EPERM` on Windows.
+- Durability operations have been tested on Linux on ext4; however, fsync may throw `EPERM` on Windows on NTFS.
 
 ## Planned
 
