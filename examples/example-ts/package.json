@@ -1,7 +1,7 @@
 {
-  "name": "example",
+  "name": "example-ts",
   "version": "1.0.0",
-  "description": "Example",
+  "description": "Example - TypeScript",
   "main": "./dist/main.js",
   "scripts": {
     "build": "tsc --build .",

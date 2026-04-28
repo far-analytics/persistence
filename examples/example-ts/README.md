@@ -63,7 +63,7 @@ git clone https://github.com/far-analytics/persistence.git
 #### Change directory into the example.
 
 ```bash
-cd persistence/examples/example
+cd persistence/examples/example-ts
 ```
 
 #### Install the example dependencies.
