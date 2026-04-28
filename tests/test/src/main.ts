@@ -275,6 +275,53 @@ await suite("LockManager", async () => {
     const cId = await cPromise;
     manager.release(cId);
   });
+
+  await test("Collect on root blocks descendant writes until released.", async () => {
+    const rootManager = new LockManager({ errorHandler: () => {} });
+    const root = pth.parse(WEB_ROOT).root;
+    const childPath = pth.join(root, "tmp", "test-lock-root-collect");
+    const c1 = await rootManager.acquire(root, "collect");
+
+    let writeResolved = false;
+    const wPromise = rootManager.acquire(childPath, "write");
+    void wPromise.then(() => {
+      writeResolved = true;
+    });
+    await tick();
+    assert.strictEqual(writeResolved, false);
+    rootManager.release(c1);
+    const wId = await wPromise;
+    rootManager.release(wId);
+  });
+
+  await test("Read, write, and delete on root are rejected.", async () => {
+    const rootManager = new LockManager({ errorHandler: () => {} });
+    const root = pth.parse(WEB_ROOT).root;
+
+    await assert.rejects(rootManager.acquire(root, "read"), /Read, write, and delete operations on root are not supported\./);
+    await assert.rejects(rootManager.acquire(root, "write"), /Read, write, and delete operations on root are not supported\./);
+    await assert.rejects(rootManager.acquire(root, "delete"), /Read, write, and delete operations on root are not supported\./);
+  });
+
+  if (process.platform === "win32") {
+    await test("Windows volumes do not conflict with each other.", async () => {
+      const rootManager = new LockManager({ errorHandler: () => {} });
+      const cPath = String.raw`C:\tmp\test-lock-volume`;
+      const dPath = String.raw`D:\tmp\test-lock-volume`;
+      const cWrite = await rootManager.acquire(cPath, "write");
+
+      let dWriteResolved = false;
+      const dWritePromise = rootManager.acquire(dPath, "write");
+      void dWritePromise.then(() => {
+        dWriteResolved = true;
+      });
+      await tick();
+      assert.strictEqual(dWriteResolved, true);
+      rootManager.release(cWrite);
+      const dWrite = await dWritePromise;
+      rootManager.release(dWrite);
+    });
+  }
 });
 
 await suite("HTTP server", async () => {
@@ -347,6 +394,14 @@ await suite("Client (durable)", async () => {
         throw err;
       });
     assert.strictEqual(exists, false);
+  });
+
+  await test("collect can list the filesystem root.", async () => {
+    const rootClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const root = pth.parse(WEB_ROOT).root;
+    const entries = await rootClient.collect(root, { encoding: "utf8", withFileTypes: false });
+    assert.strictEqual(Array.isArray(entries), true);
+    assert.ok(entries.length > 0);
   });
 });
 
