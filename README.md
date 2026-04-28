@@ -104,6 +104,7 @@ Persistence supports atomic-style file replacement via temp file + rename for `w
 
 - The directory structure that Persistence operates on is assumed to be hierarchical.
 - Hence, symlinks/aliases are not supported.
+- Filesystem root-path operations are restricted: `collect(root)` is supported, but `read(root)`, `write(root)`, and `delete(root)` are not.
 - When durability is enabled, `fsync` on directories is considered best‑effort and behaves differently on different filesystems.
 - Distributed locking or coordination across multiple independent `LockManager` instances is not supported.
 - Protection against external processes that bypass the client and write directly to disk.
@@ -112,7 +113,6 @@ Persistence supports atomic-style file replacement via temp file + rename for `w
 ## Planned
 
 - Optional lock timeout.
-- Temp file cleanup utility (i.e. in the event of a crash or power loss).
 
 ## API
 
@@ -166,6 +166,8 @@ Returns: `<Promise<Array<NonSharedBuffer>>>`
 
 Lists the entries in a directory. All paths must be absolute.
 
+`client.collect` supports filesystem root paths such as `/` on POSIX systems or a volume root such as `C:\` on Windows.
+
 _public_ **client.read(path, options)**
 
 - path `<string>` An absolute path to a file.
@@ -187,6 +189,8 @@ _public_ **client.read(path, options?)**
 Returns: `<Promise<NonSharedBuffer>>`
 
 Reads a file. All paths must be absolute.
+
+Filesystem root paths are not supported for `client.read`.
 
 _public_ **client.createReadStream(path, options?)**
 
@@ -218,6 +222,8 @@ Returns: `<Promise<void>>`
 Writes a file using a temp file + rename. In durable mode, `client.write` flushes the temp file before rename and `fsync`s the parent directory after rename.
 
 In durable mode, a rejection does not always mean the old file is still in place. If the post-rename directory `fsync` fails, the promise rejects even though the rename may already have committed the new file at the target path.
+
+Filesystem root paths are not supported for `client.write`.
 
 _public_ **client.createWriteStream(path, options?)**
 
@@ -256,9 +262,11 @@ Deletes a file or directory. In durable mode, the parent directory is `fsync`'d.
 
 In durable mode, a rejection does not always mean the target still exists. If removal succeeds but the subsequent parent-directory `fsync` fails, the promise rejects even though the file or directory may already be gone.
 
+Filesystem root paths are not supported for `client.delete`.
+
 ### The LockManager class
 
-#### new persistence.LockManager()
+#### new persistence.LockManager(options?)
 
 - options `<LockManagerOptions>` Optional options passed to the `LockManager`.
   - errorHandler `<typeof console.error>` **Default:** `console.error`.
@@ -273,6 +281,8 @@ _public_ **lockManager.acquire(path, type)**
 Returns: `<Promise<number>>`
 
 Acquires a lock for a path and returns a lock id. Reads may overlap other reads; writes are exclusive across ancestors and descendants.
+
+Filesystem root paths are supported for `type === "collect"`. Filesystem root paths are not supported for `type === "read"`, `type === "write"`, or `type === "delete"`.
 
 _public_ **lockManager.release(id)**
 
