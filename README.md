@@ -73,9 +73,13 @@ await once(readStream, "close");
 
 ## Examples
 
-### _"Hello, World!"_
+### _"Hello, World!"_ (TypeScript)
 
-Please see the [Usage](#usage) section above or the [_Hello, World!_](https://github.com/far-analytics/persistence/tree/main/examples/example) example for a working implementation.
+Please see the TypeScript [example](https://github.com/far-analytics/persistence/tree/main/examples/example-ts) for a working implementation.
+
+### _"Hello, World!"_ (Node.js)
+
+Please see the Node.js [example](https://github.com/far-analytics/persistence/tree/main/examples/example-nodejs) for a working implementation.
 
 ## Locking model
 
