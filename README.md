@@ -94,11 +94,11 @@ You can scale clients horizontally if all operations route through one authorita
 
 ## Durability
 
-When a client instance is instantiated with `{ durable: true }`, `client.write` and `client.createWriteStream` flush temp file data before rename and then `fsync`s the parent directory. `client.delete` operations `fsync` the parent directory. Durability guarantees are best‑effort and depend on filesystem and OS behavior.
+When a client instance is instantiated with `{ durable: true }`, `client.write` and `client.createWriteStream` flush temp file data before rename and then fsyncs the parent directory. `client.delete` operations fsync the parent directory. Durability guarantees are best‑effort and depend on filesystem and OS behavior.
 
 Important semantic note:
 
-In durable mode, some operations perform a filesystem mutation first and then execute a final durability step such as `fsync` on the parent directory. If that final durability step fails, the operation rejects even though the mutation may already be visible on disk. In particular, a durable `client.write` or `client.createWriteStream` may have already renamed the new file into place before rejecting, and a durable `client.delete` may already have removed the target before rejecting. Callers must not interpret every durable-mode rejection as "no change was applied". A rejection can also mean "the mutation was applied, but final durability confirmation failed".
+In durable mode, some operations perform a filesystem mutation first and then execute a final durability step such as fsync on the parent directory. If that final durability step fails, the operation rejects even though the mutation may already be visible on disk. In particular, a durable `client.write` or `client.createWriteStream` may have already renamed the new file into place before rejecting, and a durable `client.delete` may already have removed the target before rejecting. Callers must not interpret every durable-mode rejection as "no change was applied". A rejection can also mean "the mutation was applied, but final durability confirmation failed".
 
 ## Atomicity
 
@@ -109,10 +109,10 @@ Persistence supports atomic-style file replacement via temp file + rename for `w
 - The directory structure that Persistence operates on is assumed to be hierarchical.
 - Hence, symlinks/aliases are not supported.
 - Filesystem root-path operations are restricted: `client.collect(root)` is supported, but `client.read(root)`, `client.createReadStream(root)`, `client.write(root)`, `client.createWriteStream(root)`, and `client.delete(root)` are not.
-- When durability is enabled, `fsync` on directories is considered best‑effort and behaves differently on different filesystems.
+- When durability is enabled, fsync on directories is considered best‑effort and behaves differently on different filesystems.
 - Distributed locking or coordination across multiple independent `LockManager` instances is not supported.
 - Protection against external processes that bypass the client and write directly to disk.
-- Testing to date has been limited to Linux on ext4.
+- Durability operations may throw `EPERM` on Windows.
 
 ## Planned
 
@@ -128,7 +128,7 @@ The _Persistence_ API provides a client and path-aware lock manager that coordin
 
 - options `<ClientOptions>` Options passed to the `Client`.
   - manager `<LockManager>` The lock manager instance used to coordinate access.
-  - durable `<boolean>` If `true`, use stronger durability behavior for filesystem mutations: `client.write` and `client.createWriteStream` flush the temp file before rename and then `fsync` the parent directory. `client.delete` operations `fsync` the parent directory. **Default: `false`**
+  - durable `<boolean>` If `true`, use stronger durability behavior for filesystem mutations: `client.write` and `client.createWriteStream` flush the temp file before rename and then fsync the parent directory. `client.delete` operations fsync the parent directory. **Default: `false`**
 
 Use a `Client` instance to read, write, list, and delete files with hierarchical locking.
 
@@ -221,9 +221,9 @@ _public_ **client.write(path, data, options?)**
 
 Returns: `<Promise<void>>`
 
-Writes a file using a temp file + rename. In durable mode, `client.write` flushes the temp file before rename and `fsync`s the parent directory after rename.
+Writes a file using a temp file + rename. In durable mode, `client.write` flushes the temp file before rename and fsyncs the parent directory after rename.
 
-In durable mode, a rejection does not always mean the old file is still in place. If the post-rename directory `fsync` fails, the promise rejects even though the rename may already have committed the new file at the target path.
+In durable mode, a rejection does not always mean the old file is still in place. If the post-rename directory fsync fails, the promise rejects even though the rename may already have committed the new file at the target path.
 
 _public_ **client.createWriteStream(path, options?)**
 
@@ -242,8 +242,8 @@ Notes:
 
 - The stream writes to a temp file in the target directory and renames it into place before `finish` is emitted.
 - On success, `finish` means the write has been committed.
-- In durable mode, the parent directory is `fsync`'d after rename.
-- If that post-rename `fsync` fails in durable mode, the stream rejects even though the target path may already contain the new data.
+- In durable mode, the parent directory is fsync'd after rename.
+- If that post-rename fsync fails in durable mode, the stream rejects even though the target path may already contain the new data.
 - The lock is held for the entire stream lifetime, so long-running writes will block **conflicting** operations.
 
 _public_ **client.delete(path, options?)**
@@ -258,9 +258,9 @@ _public_ **client.delete(path, options?)**
 
 Returns: `<Promise<void>>`
 
-Deletes a file or directory. In durable mode, the parent directory is `fsync`'d. For the full option list, see the Node.js `fs.promises.rm` documentation.
+Deletes a file or directory. In durable mode, the parent directory is fsync'd. For the full option list, see the Node.js `fs.promises.rm` documentation.
 
-In durable mode, a rejection does not always mean the target still exists. If removal succeeds but the subsequent parent-directory `fsync` fails, the promise rejects even though the file or directory may already be gone.
+In durable mode, a rejection does not always mean the target still exists. If removal succeeds but the subsequent parent-directory fsync fails, the promise rejects even though the file or directory may already be gone.
 
 ### The LockManager class
 
