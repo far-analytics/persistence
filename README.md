@@ -94,7 +94,7 @@ You can scale clients horizontally if all operations route through one authorita
 
 ## Durability
 
-When a client instance is instantiated with `{ durable: true }`, `client.write` and `client.createWriteStream` flush temp file data before rename and then fsyncs the parent directory. `client.delete` operations fsync the parent directory. Durability guarantees are best‑effort and depend on filesystem and OS behavior.
+When a client instance is instantiated with `{ durable: true }`, `client.write` and `client.createWriteStream` flush temp file data before rename and then fsyncs the parent directory. Likewise, `client.delete` operations fsync the parent directory. Durability guarantees are best‑effort and depend on filesystem and OS behavior.
 
 Important semantic note:
 
@@ -128,7 +128,7 @@ The _Persistence_ API provides a client and path-aware lock manager that coordin
 
 - options `<ClientOptions>` Options passed to the `Client`.
   - manager `<LockManager>` The lock manager instance used to coordinate access.
-  - durable `<boolean>` If `true`, use stronger durability behavior for filesystem mutations: `client.write` and `client.createWriteStream` flush the temp file before rename and then fsync the parent directory. `client.delete` operations fsync the parent directory. **Default: `false`**
+  - durable `<boolean>` If `true`, use stronger durability behavior for filesystem mutations: `client.write` and `client.createWriteStream` flush the temp file before rename and then fsync the parent directory. Likewise, `client.delete` operations fsync the parent directory. **Default: `false`**
 
 Use a `Client` instance to read, write, list, and delete files with hierarchical locking.
 
