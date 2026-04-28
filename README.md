@@ -94,7 +94,7 @@ You can scale clients horizontally if all operations route through one authorita
 
 ## Durability
 
-When a client instance is instantiated with `{ durable: true }`, `client.write` and `client.createWriteStream` flush temp file data before rename and then fsyncs the parent directory. Likewise, `client.delete` operations fsync the parent directory. Durability guarantees are best‑effort and depend on filesystem and OS behavior.
+When a client instance is instantiated with `{ durable: true }`, `client.write` and `client.createWriteStream` flush temp file data before rename and then fsyncs the parent directory. Likewise, `client.delete` operations fsync the parent directory. Durability guarantees are best‑effort and depend on filesystem and OS behavior. Durability operations have been tested on Linux on ext4; however, fsync may throw `EPERM` on Windows on NTFS.
 
 Important semantic note:
 
@@ -113,10 +113,6 @@ Persistence supports atomic-style file replacement via temp file + rename for `w
 - Protection against external processes that bypass the client and write directly to disk.
 - When durability is enabled, fsync on directories is considered best‑effort and behaves differently on different filesystems.
 - Durability operations have been tested on Linux on ext4; however, fsync may throw `EPERM` on Windows on NTFS.
-
-## Planned
-
-- Optional lock timeout.
 
 ## API
 
