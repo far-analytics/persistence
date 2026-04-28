@@ -73,11 +73,11 @@ await once(readStream, "close");
 
 ## Examples
 
-### _"Hello, World!"_ (TypeScript)
+### _"Hello, World!"_ <sup>\<TypeScript\></sup>
 
 Please see the TypeScript [example](https://github.com/far-analytics/persistence/tree/main/examples/example-ts) for a working implementation.
 
-### _"Hello, World!"_ (Node.js)
+### _"Hello, World!"_ <sup>\<Node.js\></sup>
 
 Please see the Node.js [example](https://github.com/far-analytics/persistence/tree/main/examples/example-nodejs) for a working implementation.
 
