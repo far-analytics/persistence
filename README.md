@@ -1,10 +1,10 @@
 # Persistence
 
-Persistence - a filesystem-backed persistence layer with hierarchical RW locking, atomic-style writes, and optional durability.
+Persistence - a filesystem-backed persistence layer.
 
 ## Introduction
 
-Persistence is a filesystem-backed persistence layer. It provides hierarchical read/write locking, optional durability, and atomic‑style writes. You can use Persistence as a drop-in library to safely coordinate reads and writes to the filesystem. Reads on the same file are concurrent; however, reads are partitioned by writes and conflicting writes are processed in order of arrival (FIFO).
+Persistence is a filesystem-backed persistence layer. It provides hierarchical read/write locking, optional durability (see durability notes below), and atomic‑style writes. You can use Persistence to safely coordinate operations through a single shared `LockManager` over hierarchical paths. Reads on the same file are concurrent; however, reads are partitioned by writes and conflicting writes are processed in order of arrival (FIFO).
 
 ### Features
 
@@ -90,7 +90,7 @@ Please see the Node.js [example](https://github.com/far-analytics/persistence/tr
 
 ## Horizontal scaling
 
-Persistence supports horizontal scaling across multiple clients, as long as all operations route through a single authoritative `LockManager` (for example, a shared in-process instance or a single lock service accessed over RPC).
+You can scale clients horizontally if all operations route through one authoritative `LockManager` (for example, a shared in-process instance or a single lock service accessed over RPC).
 
 ## Durability
 
@@ -120,7 +120,7 @@ Persistence supports atomic-style file replacement via temp file + rename for `w
 
 ## API
 
-The _Persistence_ API provides a path-aware lock manager and a filesystem client that uses it for safe reads and writes.
+The _Persistence_ API provides a client and path-aware lock manager that coordinates operations.
 
 ### The Client class
 
