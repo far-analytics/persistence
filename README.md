@@ -194,8 +194,6 @@ Returns: `<Promise<NonSharedBuffer>>`
 
 Reads a file. All paths must be absolute.
 
-Filesystem root paths are not supported for `client.read`.
-
 _public_ **client.createReadStream(path, options?)**
 
 - path `<string>` An absolute path to a file.
@@ -226,8 +224,6 @@ Returns: `<Promise<void>>`
 Writes a file using a temp file + rename. In durable mode, `client.write` flushes the temp file before rename and `fsync`s the parent directory after rename.
 
 In durable mode, a rejection does not always mean the old file is still in place. If the post-rename directory `fsync` fails, the promise rejects even though the rename may already have committed the new file at the target path.
-
-Filesystem root paths are not supported for `client.write`.
 
 _public_ **client.createWriteStream(path, options?)**
 
@@ -265,8 +261,6 @@ Returns: `<Promise<void>>`
 Deletes a file or directory. In durable mode, the parent directory is `fsync`'d. For the full option list, see the Node.js `fs.promises.rm` documentation.
 
 In durable mode, a rejection does not always mean the target still exists. If removal succeeds but the subsequent parent-directory `fsync` fails, the promise rejects even though the file or directory may already be gone.
-
-Filesystem root paths are not supported for `client.delete`.
 
 ### The LockManager class
 
