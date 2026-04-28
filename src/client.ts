@@ -9,7 +9,6 @@ import { WriteStream } from "./write_stream.js";
 
 export interface ClientCreateReadStreamOptions {
   end?: number | undefined;
-  flags?: string | undefined;
   encoding?: BufferEncoding | undefined;
   mode?: number | undefined;
   start?: number | undefined;
@@ -55,14 +54,12 @@ export type ClientCollectOptions = ClientCollectDirentOptions | ClientCollectStr
 export type ClientReadStringOptions =
   | ({
       encoding: BufferEncoding;
-      flag?: fs.OpenMode | undefined;
     } & Abortable)
   | BufferEncoding;
 
 export type ClientReadBufferOptions =
   | ({
       encoding?: null | undefined;
-      flag?: fs.OpenMode | undefined;
     } & Abortable)
   | null;
 
@@ -154,7 +151,6 @@ export class Client {
         typeof options == "string"
           ? { encoding: options }
           : {
-              flags: options?.flags,
               encoding: options?.encoding,
               mode: options?.mode,
               start: options?.start,
