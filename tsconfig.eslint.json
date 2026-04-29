@@ -5,12 +5,8 @@
     "allowJs": true,
     "checkJs": true,
     "module": "node16",
-    "moduleResolution": "node16",
-    "baseUrl": ".",
-    "paths": {
-      "@far-analytics/persistence": ["./src/index.ts"]
-    },
     "strict": true
   },
-  "include": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"]
+  "include": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"],
+  "exclude": ["**/dist/**", "**/node_modules/**"]
 }

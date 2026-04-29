@@ -8,7 +8,7 @@ export default defineConfig([
   eslint.configs.recommended,
   tseslint.configs.strictTypeChecked,
   tseslint.configs.stylisticTypeChecked,
-  { ignores: ["**/dist", "**/.archive"] },
+  { ignores: ["**/dist/**", "**/node_modules/**"] },
   {
     languageOptions: {
       parserOptions: { project: ["./tsconfig.eslint.json"] },
