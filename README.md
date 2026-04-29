@@ -8,7 +8,7 @@ Persistence is a filesystem-backed coordination layer. It provides hierarchical 
 
 ### Features
 
-- **A _zero-dependency_ filesystem storage layer.**
+- **A _zero-dependency_ filesystem coordination layer.**
 - Coordinates reads and writes with hierarchical path locks.
 - Provides atomic-style file replacement (temp file + rename).
 - Flushes directory metadata for stronger durability on write/delete when durability is enabled.
