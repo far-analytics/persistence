@@ -418,8 +418,14 @@ await suite("Client (collect)", async () => {
     const entries = await collectClient.collect(dir, { encoding: "buffer", withFileTypes: true });
     const names = [...entries.map((entry) => entry.name.toString("utf8"))].sort();
     assert.deepStrictEqual(names, ["nested", "root.json"]);
-    assert.strictEqual(entries.some((entry) => entry.isDirectory()), true);
-    assert.strictEqual(entries.some((entry) => entry.isFile()), true);
+    assert.strictEqual(
+      entries.some((entry) => entry.isDirectory()),
+      true
+    );
+    assert.strictEqual(
+      entries.some((entry) => entry.isFile()),
+      true
+    );
   });
 });
 
