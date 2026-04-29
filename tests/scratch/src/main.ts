@@ -8,3 +8,5 @@ const writeStream = await client.createWriteStream("/home/null/workspace/repos/f
 writeStream.write(JSON.stringify({ message: "Streaming Hello, World!" }) + `\n`);
 writeStream.end();
 await once(writeStream, "finish");
+const collection = await client.collect("/home/null/workspace/repos/far-analytics/persistence/tests/scratch/");
+console.log(collection);
