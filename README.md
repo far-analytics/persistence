@@ -1,10 +1,10 @@
 # Persistence
 
-Persistence - a filesystem-backed coordination layer.
+Persistence - a filesystem coordination layer.
 
 ## Introduction
 
-Persistence is a filesystem-backed coordination layer. It provides hierarchical read/write locking, optional durability (see durability notes below), and atomic‑style writes. You can use Persistence to safely coordinate operations through a single shared `LockManager` over hierarchical paths. Reads on the same file are concurrent; however, reads are partitioned by writes and conflicting writes are processed in order of arrival (FIFO).
+Persistence is a filesystem coordination layer. It provides hierarchical read/write locking, optional durability (see durability notes below), and atomic‑style writes. You can use Persistence to safely coordinate operations through a single shared `LockManager` over hierarchical paths. Reads on the same file are concurrent; however, reads are partitioned by writes and conflicting writes are processed in order of arrival (FIFO).
 
 ### Features
 
