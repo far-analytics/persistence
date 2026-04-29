@@ -36,7 +36,7 @@ export interface ClientCollectDirentOptions {
 
 export type ClientCollectStringOptions =
   | {
-      encoding: Exclude<BufferEncoding, "buffer">;
+      encoding?: Exclude<BufferEncoding, "buffer"> | undefined;
       withFileTypes?: false;
       recursive?: boolean;
     }
