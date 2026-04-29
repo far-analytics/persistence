@@ -111,7 +111,15 @@ export class Client {
         const parsed = pth.parse(path);
         const parent = parsed.dir;
         await fsp.rm(path, options);
-        const fh = await fsp.open(parent, "r");
+        let fh;
+        try {
+          fh = await fsp.open(parent, "r");
+        } catch (err) {
+          if (options?.force && err instanceof Error && "code" in err && err.code === "ENOENT") {
+            return;
+          }
+          throw err;
+        }
         try {
           await fh.sync();
         } finally {
