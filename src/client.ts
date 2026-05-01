@@ -88,13 +88,18 @@ export class Client {
     path = pth.resolve(path);
     const id = await this.manager.acquire(path, "collect");
     try {
-      if (options && typeof options === "object" && "withFileTypes" in options && options.withFileTypes) {
-        return await fsp.readdir(path, options);
-      } else if (options && typeof options === "object" && options.encoding == "buffer") {
-        return await fsp.readdir(path, options);
-      } else {
+      // These branches exist to narrow `options` into the correct `fs.promises.readdir`
+      // overloads without a type assertion. Runtime behavior is the same in each case.
+      if (typeof options === "string" || options === null || options === undefined) {
         return await fsp.readdir(path, options);
       }
+      if (options.withFileTypes === true) {
+        return await fsp.readdir(path, options);
+      }
+      if (options.encoding === "buffer") {
+        return await fsp.readdir(path, options);
+      }
+      return await fsp.readdir(path, options);
     } finally {
       this.manager.release(id);
     }
