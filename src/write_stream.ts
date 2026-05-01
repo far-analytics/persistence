@@ -1,9 +1,10 @@
 import * as stream from "node:stream";
 import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
-import { LockManager } from "./lock_manager";
+import { LockManager } from "./lock_manager.js";
 import { finished } from "node:stream/promises";
-import { ClientCreateWriteStreamOptions } from "./client";
+import { ClientCreateWriteStreamOptions } from "./client.js";
+import { once } from "node:events";
 
 export interface WriteStreamOptions {
   durable: boolean;
@@ -42,24 +43,36 @@ export class WriteStream extends stream.Writable {
   }
 
   _write(chunk: string | Buffer, encoding: BufferEncoding, callback: (error?: Error | null) => void): void {
-    if (!this.fsWriteStream.write(chunk, encoding)) {
-      this.fsWriteStream.once("drain", () => {
-        callback();
-      });
-      return;
+    try {
+      if (!this.fsWriteStream.write(chunk, encoding)) {
+        this.fsWriteStream.once("drain", () => {
+          callback();
+        });
+        return;
+      }
+      callback();
+    } catch (err) {
+      callback(err instanceof Error ? err : new Error(String(err)));
     }
-    callback();
   }
 
   _writev(chunks: { chunk: string | Buffer; encoding: BufferEncoding }[], callback: (error?: Error | null) => void): void {
-    const buffer = Buffer.concat(chunks.map(({ chunk, encoding }) => (Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, encoding))));
-    if (!this.fsWriteStream.write(buffer)) {
-      this.fsWriteStream.once("drain", () => {
+    void (async () => {
+      try {
+        let drain = false;
+        for (const [, { chunk, encoding }] of chunks.entries()) {
+          if (!this.fsWriteStream.write(chunk, encoding)) {
+            drain = true;
+          }
+        }
+        if (drain) {
+          await once(this.fsWriteStream, "drain");
+        }
         callback();
-      });
-      return;
-    }
-    callback();
+      } catch (err) {
+        callback(err instanceof Error ? err : new Error(String(err)));
+      }
+    })();
   }
 
   _final(callback: (error?: Error | null) => void): void {
