@@ -21,8 +21,8 @@ It is intentionally minimal: one lock manager, one client, one clear set of sema
 **Setup**
 
 ```ts
-import { once } from "node:events";
 import { Client, LockManager } from "@far-analytics/persistence";
+import { once } from "node:events";
 
 const manager = new LockManager();
 const client = new Client({ manager, durable: true });
