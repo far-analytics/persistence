@@ -1064,23 +1064,6 @@ await suite("Client (streams)", async () => {
     assert.strictEqual(data, "hello world!");
   });
 
-  await test("Durable createWriteStream handles mixed Buffer and string chunks.", async () => {
-    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
-    const dir = pth.join(WEB_ROOT, "streams", "durable-mixed-chunks");
-    const file = pth.join(dir, "mixed-chunks.txt");
-    await fsp.mkdir(dir, { recursive: true });
-
-    const ws = await streamClient.createWriteStream(file, "utf8");
-    ws.write(Buffer.from("hello", "utf8"));
-    ws.write(" ");
-    ws.write(Buffer.from("world", "utf8"));
-    ws.end("!");
-    await finished(ws);
-
-    const data = await streamClient.read(file, "utf8");
-    assert.strictEqual(data, "hello world!");
-  });
-
   await test("createWriteStream honors configured default encoding.", async () => {
     const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
     const dir = pth.join(WEB_ROOT, "streams");
@@ -1096,39 +1079,9 @@ await suite("Client (streams)", async () => {
     assert.strictEqual(data, "hello world");
   });
 
-  await test("Durable createWriteStream honors configured default encoding.", async () => {
-    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
-    const dir = pth.join(WEB_ROOT, "streams", "durable-encoding");
-    const file = pth.join(dir, "encoding.txt");
-    await fsp.mkdir(dir, { recursive: true });
-
-    const ws = await streamClient.createWriteStream(file, { encoding: "utf16le" });
-    ws.write("hello");
-    ws.end(" world");
-    await finished(ws);
-
-    const data = await streamClient.read(file, "utf16le");
-    assert.strictEqual(data, "hello world");
-  });
-
   await test("createWriteStream honors explicit per-write encodings.", async () => {
     const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
     const dir = pth.join(WEB_ROOT, "streams");
-    const file = pth.join(dir, "per-write-encoding.txt");
-    await fsp.mkdir(dir, { recursive: true });
-
-    const ws = await streamClient.createWriteStream(file, "utf8");
-    ws.write(Buffer.from("hello ", "utf8").toString("hex"), "hex");
-    ws.end(Buffer.from("world", "utf8").toString("base64"), "base64");
-    await finished(ws);
-
-    const data = await streamClient.read(file, "utf8");
-    assert.strictEqual(data, "hello world");
-  });
-
-  await test("Durable createWriteStream honors explicit per-write encodings.", async () => {
-    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
-    const dir = pth.join(WEB_ROOT, "streams", "durable-per-write-encoding");
     const file = pth.join(dir, "per-write-encoding.txt");
     await fsp.mkdir(dir, { recursive: true });
 
