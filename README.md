@@ -14,14 +14,10 @@ Persistence is a filesystem coordination layer. It provides hierarchical read/wr
 - Flushes directory metadata for stronger durability on write/delete when durability is enabled.
 - FIFO: for any two conflicting operations where at least one is a write, acquisition respects arrival order.
 
-```
-Persistence _(noun)_
-
-_\\pər-ˈsi-stən(t)s\\_
-
-**2:** Continued effort to achieve something despite difficulties, opposition, or discouragement.
+Persistence _(noun)_<br>
+_\\pər-ˈsi-stən(t)s\\_<br>
+**2:** Continued effort to achieve something despite difficulties, opposition, or discouragement.<br>
 _Success achieved through sheer persistence._
-```
 
 ### Table of contents
 
