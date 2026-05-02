@@ -13,7 +13,6 @@ Persistence is a filesystem coordination layer. It provides hierarchical read/wr
 - Provides atomic-style file replacement (temp file + rename).
 - Flushes directory metadata for stronger durability on write/delete when durability is enabled.
 - FIFO: for any two conflicting operations where at least one is a write, acquisition respects arrival order.
-<br>
 
 >**Persistence _(noun)_**<br>
 >_\\pər-ˈsi-stən(t)s\\_
