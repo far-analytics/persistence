@@ -13,12 +13,14 @@ Persistence is a filesystem coordination layer. It provides hierarchical read/wr
 - Provides atomic-style file replacement (temp file + rename).
 - Flushes directory metadata for stronger durability on write/delete when durability is enabled.
 - FIFO: for any two conflicting operations where at least one is a write, acquisition respects arrival order.
+<br><br>
 
-**Persistence _(noun)_**<br>
-_\\pər-ˈsi-stən(t)s\\_
-
-**2:** Continued effort to achieve something despite difficulties, opposition, or discouragement.<br>
-_Success achieved through sheer persistence._
+>**Persistence _(noun)_**<br>
+>_\\pər-ˈsi-stən(t)s\\_
+>
+>**2:** Continued effort to achieve something despite difficulties, opposition, or discouragement.<br>
+>_Success achieved through sheer persistence._
+<br>
 
 ### Table of contents
 
@@ -98,11 +100,11 @@ await once(readStream, "close");
 
 ## Examples
 
-### _"Hello, World!"_ <sup>\<TypeScript\></sup>
+### _"Hello, World!"_ <sup><sup>\<TypeScript\></sup></sup>
 
 Please see the TypeScript [example](https://github.com/far-analytics/persistence/tree/main/examples/example-ts) for a working implementation.
 
-### _"Hello, World!"_ <sup>\<Node.js\></sup>
+### _"Hello, World!"_ <sup><sup>\<Node.js\></sup></sup>
 
 Please see the Node.js [example](https://github.com/far-analytics/persistence/tree/main/examples/example-nodejs) for a working implementation.
 
