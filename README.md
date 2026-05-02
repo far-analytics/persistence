@@ -14,15 +14,13 @@ Persistence is a filesystem coordination layer. It provides hierarchical read/wr
 - Flushes directory metadata for stronger durability on write/delete when durability is enabled.
 - FIFO: for any two conflicting operations where at least one is a write, acquisition respects arrival order.
 
-It is intentionally minimal: one lock manager, one client, one clear set of semantics.
-
 ## Usage
 
 **Setup**
 
 ```ts
 import { Client, LockManager } from "@far-analytics/persistence";
-import { once } from "node:events";
+import { once } from "node:events"; // for awaiting ReadStream and WriteStream events
 
 const manager = new LockManager();
 const client = new Client({ manager, durable: true });
@@ -60,7 +58,7 @@ await client.delete("/tmp/example.json");
 const writeStream = await client.createWriteStream("/tmp/example.json");
 writeStream.write(JSON.stringify({ message: "Streaming Hello, World!" }) + `\n`);
 writeStream.end();
-await once(writeStream, "finish");
+await once(writeStream, "finish"); // or `close`
 ```
 
 **Create a read stream and read from a file**
@@ -108,11 +106,11 @@ Persistence supports atomic-style file replacement via temp file + rename for `w
 
 - The directory structure that Persistence operates on is assumed to be hierarchical.
 - Hence, symlinks/aliases are not supported.
-- Filesystem root-path operations are restricted: `client.collect(root)` is supported, but `client.read(root)`, `client.createReadStream(root)`, `client.write(root)`, `client.createWriteStream(root)`, and `client.delete(root)` are not.
+- Filesystem root-path operations (i.e., operations on `/` or `C:\`) are restricted: `client.collect(root)` is supported, but `client.read(root)`, `client.createReadStream(root)`, `client.write(root)`, `client.createWriteStream(root)`, and `client.delete(root)` are not.
 - Distributed locking or coordination across multiple independent `LockManager` instances is not supported.
 - No protection against external processes that bypass the client and write directly to disk.
 - When durability is enabled, fsync on directories is considered best‑effort and behaves differently on different filesystems.
-- Durability operations have been tested on Linux on ext4; however, fsync may throw `EPERM` on Windows on NTFS.
+- Durability operations have been tested on Linux on ext4; however, fsync (durability mode) may throw `EPERM` on Windows on NTFS.
 
 ## API
 
