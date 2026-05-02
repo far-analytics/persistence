@@ -22,6 +22,7 @@ _Success achieved through sheer persistence._
 
 ### Table of contents
 
+- [Installation](#installation)
 - [Usage](#usage)
 - [Examples](#examples)
 - [Locking model](#locking-model)
@@ -33,6 +34,12 @@ _Success achieved through sheer persistence._
 - [Versioning](#versioning)
 - [Tests](#tests)
 - [Support](#support)
+
+## Installation
+
+```bash
+npm install @far-analytics/persistence
+```
 
 ## Usage
 
@@ -78,7 +85,7 @@ await client.delete("/tmp/example.json");
 const writeStream = await client.createWriteStream("/tmp/example.json");
 writeStream.write(JSON.stringify({ message: "Streaming Hello, World!" }) + `\n`);
 writeStream.end();
-await once(writeStream, "finish"); // or `close`
+await once(writeStream, "finish");
 ```
 
 **Create a read stream and read from a file**
@@ -112,7 +119,7 @@ You can scale clients horizontally if all operations route through one authorita
 
 ## Durability
 
-When a client instance is instantiated with `{ durable: true }`, `client.write` and `client.createWriteStream` flush temp file data before rename and then fsyncs the parent directory. Likewise, `client.delete` operations fsync the parent directory. Durability guarantees are best‑effort and depend on filesystem and OS behavior. Durability operations have been tested on Linux on ext4; however, fsync may throw `EPERM` on Windows on NTFS.
+When a client instance is instantiated with `{ durable: true }`, `client.write` and `client.createWriteStream` flush temp file data before rename and then fsync the parent directory. Likewise, `client.delete` operations fsync the parent directory. Durability guarantees are best‑effort and depend on filesystem and OS behavior. Durability operations have been tested on Linux on ext4; however, fsync may throw `EPERM` on Windows on NTFS.
 
 Important semantic note:
 
@@ -138,7 +145,7 @@ The _Persistence_ API provides a client and path-aware lock manager that coordin
 
 ### The Client class
 
-#### new persistence.Client(options)
+#### new Client(options)
 
 - options `<ClientOptions>` Options passed to the `Client`.
   - manager `<LockManager>` The lock manager instance used to coordinate access.
@@ -157,10 +164,10 @@ _public_ **client.collect(path, options)**
 - path `<string>` An absolute path to a directory.
 - options `<ClientCollectDirentOptions>`
   - encoding `<"buffer">`
-  - withFileTypes `<true>` Enables `Dirent` output with `NonSharedBuffer` names.
+  - withFileTypes `<true>` Enables `Dirent` output with `Buffer<ArrayBuffer>` names.
   - recursive `<boolean>` Optional.
 
-Returns: `<Promise<Array<fs.Dirent<NonSharedBuffer>>>>`
+Returns: `<Promise<Array<fs.Dirent<Buffer<ArrayBuffer>>>>>`
 
 _public_ **client.collect(path, options?)**
 
@@ -180,7 +187,7 @@ _public_ **client.collect(path, options)**
   - withFileTypes `<false>` Optional.
   - recursive `<boolean>` Optional.
 
-Returns: `<Promise<Array<NonSharedBuffer>>>`
+Returns: `<Promise<Array<Buffer<ArrayBuffer>>>>`
 
 Lists the entries in a directory. All paths must be absolute.
 
@@ -202,7 +209,7 @@ _public_ **client.read(path, options?)**
   - encoding `<null>` Optional. Reads raw bytes when omitted or `null`.
   - signal `<AbortSignal>` Abort an in-progress read.
 
-Returns: `<Promise<NonSharedBuffer>>`
+Returns: `<Promise<Buffer<ArrayBuffer>>>`
 
 Reads a file. All paths must be absolute.
 
@@ -245,7 +252,7 @@ _public_ **client.createWriteStream(path, options?)**
   - signal `<AbortSignal>` Abort an in‑progress write.
   - highWaterMark `<number>` Write buffer size.
 
-Returns: `<Promise<persistence.WriteStream>>`
+Returns: `<Promise<WriteStream>>`
 
 Creates an atomic write stream abstraction backed by a temp file + rename and holds a write lock for the stream lifetime. Persistence supports the subset of write-stream options listed above.
 
@@ -275,7 +282,7 @@ In durable mode, a rejection does not always mean the target still exists. If re
 
 ### The LockManager class
 
-#### new persistence.LockManager(options?)
+#### new LockManager(options?)
 
 - options `<LockManagerOptions>` Optional options passed to the `LockManager`.
   - errorHandler `<typeof console.error>` **Default:** `console.error`.
@@ -309,7 +316,7 @@ The root node of the internal lock graph.
 
 ### The GraphNode interface
 
-#### persistence.GraphNode
+#### GraphNode
 
 - segment `<string>` The path segment for this node.
 - parent `<GraphNode | null>` The parent node.
@@ -319,7 +326,7 @@ The root node of the internal lock graph.
 
 ### The Artifacts interface
 
-#### persistence.Artifacts
+#### Artifacts
 
 - locks `<Array<Promise<unknown>>>` Promises the lock acquisition must await.
 - node `<GraphNode>` The graph node for the path.
@@ -330,7 +337,7 @@ Until `2.0.0`, Persistence does not promise strict semantic versioning. Minor re
 
 ## Tests
 
-### How to run the test
+### How to run the test suite
 
 #### Clone the repository.
 
@@ -358,6 +365,6 @@ npm test
 
 ## Support
 
-For feature requests or issues, please open an [issue](https://github.com/far-analytics/persistence/issues) or contact one of the authors.
+For feature requests or issues, please open an [issue](https://github.com/far-analytics/persistence/issues) or contact the author.
 
 - [Adam Patterson](https://github.com/adpatter)
