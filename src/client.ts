@@ -171,13 +171,15 @@ export class Client {
               highWaterMark: options?.highWaterMark,
               end: options?.end,
             };
-      const stream = fs.createReadStream(path, options);
-      const releaseOnce = () => {
+      const readStream = fs.createReadStream(path, options);
+      const release = () => {
+        readStream.off("close", release);
+        readStream.off("error", release);
         this.manager.release(id);
       };
-      stream.once("close", releaseOnce);
-      stream.once("error", releaseOnce);
-      return stream;
+      readStream.once("close", release);
+      readStream.once("error", release);
+      return readStream;
     } catch (err) {
       this.manager.release(id);
       throw err;
