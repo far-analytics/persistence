@@ -14,6 +14,20 @@ Persistence is a filesystem coordination layer. It provides hierarchical read/wr
 - Flushes directory metadata for stronger durability on write/delete when durability is enabled.
 - FIFO: for any two conflicting operations where at least one is a write, acquisition respects arrival order.
 
+### Table of contents
+
+- [Usage](#usage)
+- [Examples](#examples)
+- [Locking model](#locking-model)
+- [Horizontal scaling](#horizontal-scaling)
+- [Durability](#durability)
+- [Atomicity](#atomicity)
+- [Limitations](#limitations)
+- [API](#api)
+- [Versioning](#versioning)
+- [Tests](#tests)
+- [Support](#support)
+
 ## Usage
 
 **Setup**
