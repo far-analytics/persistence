@@ -451,7 +451,7 @@ await suite("LockManager (acquireAll)", async () => {
     rootManager.release(unrelatedWriteId);
   });
 
-  await test("an earlier conflicting write acquires before a later conflicting acquireAll.", async () => {
+  await test("An earlier conflicting write acquires before a later conflicting acquireAll.", async () => {
     const rootManager = new LockManager({ errorHandler: () => {} });
     const root = pth.parse(WEB_ROOT).root;
     const pathA = pth.join(root, "tmp", "test-lock-acquire-all-fifo", "a");
@@ -489,7 +489,7 @@ await suite("LockManager (acquireAll)", async () => {
     rootManager.release(secondAcquireAllId);
   });
 
-  await test("an earlier conflicting acquireAll acquires before a later conflicting write.", async () => {
+  await test("An earlier conflicting acquireAll acquires before a later conflicting write.", async () => {
     const rootManager = new LockManager({ errorHandler: () => {} });
     const root = pth.parse(WEB_ROOT).root;
     const pathA = pth.join(root, "tmp", "test-lock-acquire-all-fifo-reverse", "a");
@@ -680,11 +680,11 @@ await suite("Client (rename)", async () => {
     await fsp.mkdir(destDir, { recursive: true });
     await fsp.writeFile(oldPath, JSON.stringify({ v: 1 }));
 
-    const renameEntered = deferred<void>();
-    const releaseRename = deferred<void>();
+    const renameEntered = deferred<unknown>();
+    const releaseRename = deferred<unknown>();
     const originalRename = mutableFsp.rename;
     mutableFsp.rename = async (...args: Parameters<typeof fsp.rename>) => {
-      renameEntered.resolve();
+      renameEntered.resolve(null);
       await releaseRename.promise;
       return originalRename(...args);
     };
@@ -709,7 +709,7 @@ await suite("Client (rename)", async () => {
       assert.strictEqual(oldPathResolved, false);
       assert.strictEqual(newPathResolved, false);
 
-      releaseRename.resolve();
+      releaseRename.resolve(null);
       await renamePromise;
 
       const oldPathId = await oldPathPromise;
@@ -740,7 +740,7 @@ await suite("Client (rename)", async () => {
     await fsp.writeFile(oldPath, JSON.stringify({ v: 1 }));
 
     const originalRename = mutableFsp.rename;
-    mutableFsp.rename = async () => {
+    mutableFsp.rename = () => {
       throw new Error("Injected rename failure");
     };
 
@@ -760,7 +760,7 @@ await suite("Client (rename)", async () => {
     }
   });
 
-  await test("durable rename reports directory sync failure after rename and releases both locks.", async () => {
+  await test("Durable rename reports directory sync failure after rename and releases both locks.", async () => {
     const renameManager = new LockManager({ errorHandler: () => {} });
     const renameClient = new Client({ manager: renameManager, durable: true });
     const dir = pth.join(WEB_ROOT, "rename", "durable-sync-failure");
@@ -807,7 +807,7 @@ await suite("Client (rename)", async () => {
     renameManager.release(lockId);
   });
 
-  await test("durable rename syncs both source and destination directories on success.", async () => {
+  await test("Durable rename syncs both source and destination directories on success.", async () => {
     const renameManager = new LockManager({ errorHandler: () => {} });
     const renameClient = new Client({ manager: renameManager, durable: true });
     const dir = pth.join(WEB_ROOT, "rename", "durable-sync-success");
