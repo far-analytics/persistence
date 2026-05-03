@@ -105,6 +105,38 @@ export class Client {
     }
   }
 
+  public async rename(oldPath: string, newPath: string): Promise<void> {
+    if (!pth.isAbsolute(oldPath)) {
+      throw new Error("oldPath must be absolute.");
+    }
+
+    if (!pth.isAbsolute(newPath)) {
+      throw new Error("newPath must be absolute.");
+    }
+
+    const paths: string[] = [];
+    for (const path of [oldPath, newPath]) {
+      paths.push(pth.resolve(path));
+    }
+    const id = await this.manager.acquireAll(paths);
+    try {
+      await fsp.rename(oldPath, newPath);
+      if (this.durable) {
+        for (const path of paths) {
+          const dir = pth.dirname(path);
+          const fh = await fsp.open(dir, "r");
+          try {
+            await fh.sync();
+          } finally {
+            await fh.close();
+          }
+        }
+      }
+    } finally {
+      this.manager.release(id);
+    }
+  }
+
   public async delete(path: string, options?: fs.RmOptions): Promise<void> {
     if (!pth.isAbsolute(path)) {
       throw new Error("Path must be absolute.");
@@ -112,13 +144,12 @@ export class Client {
     path = pth.resolve(path);
     const id = await this.manager.acquire(path, "delete");
     try {
+      await fsp.rm(path, options);
       if (this.durable) {
-        const parsed = pth.parse(path);
-        const parent = parsed.dir;
-        await fsp.rm(path, options);
+        const dir = pth.dirname(path);
         let fh;
         try {
-          fh = await fsp.open(parent, "r");
+          fh = await fsp.open(dir, "r");
         } catch (err) {
           if (options?.force && err instanceof Error && "code" in err && err.code === "ENOENT") {
             return;
@@ -130,8 +161,6 @@ export class Client {
         } finally {
           await fh.close();
         }
-      } else {
-        await fsp.rm(path, options);
       }
     } finally {
       this.manager.release(id);
