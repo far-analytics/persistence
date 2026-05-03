@@ -324,6 +324,210 @@ await suite("LockManager", async () => {
   }
 });
 
+await suite("LockManager (acquireAll)", async () => {
+  const tick = () => new Promise((r) => setImmediate(r));
+
+  await test("acquireAll prunes partial graph state when a later path is invalid.", async () => {
+    const rootManager = new LockManager({ errorHandler: () => {} });
+    const root = pth.parse(WEB_ROOT).root;
+    const validPath = pth.join(root, "tmp", "test-lock-acquire-all-cleanup", "a");
+
+    await assert.rejects(
+      rootManager.acquireAll([validPath, root]),
+      /Read, write, and delete operations on root are not supported\./,
+    );
+
+    assert.strictEqual(rootManager.root.children.size, 0);
+  });
+
+  await test("acquireAll on ancestor and descendant paths acquires without self-deadlock and blocks conflicting writes.", async () => {
+    const rootManager = new LockManager({ errorHandler: () => {} });
+    const root = pth.parse(WEB_ROOT).root;
+    const parentPath = pth.join(root, "tmp", "test-lock-acquire-all-ancestor", "a");
+    const childPath = pth.join(parentPath, "b");
+
+    let acquireAllResolved = false;
+    const acquireAllPromise = rootManager.acquireAll([parentPath, childPath]);
+    void acquireAllPromise.then(() => {
+      acquireAllResolved = true;
+    });
+
+    await tick();
+    assert.strictEqual(acquireAllResolved, true);
+
+    const acquireAllId = await acquireAllPromise;
+    let writeResolved = false;
+    const writePromise = rootManager.acquire(parentPath, "write");
+    void writePromise.then(() => {
+      writeResolved = true;
+    });
+
+    await tick();
+    assert.strictEqual(writeResolved, false);
+
+    rootManager.release(acquireAllId);
+    const writeId = await writePromise;
+    rootManager.release(writeId);
+  });
+
+  await test("acquireAll on independent paths blocks conflicts on either path but not unrelated writes.", async () => {
+    const rootManager = new LockManager({ errorHandler: () => {} });
+    const root = pth.parse(WEB_ROOT).root;
+    const pathA = pth.join(root, "tmp", "test-lock-acquire-all-independent", "a");
+    const pathB = pth.join(root, "tmp", "test-lock-acquire-all-independent", "b");
+    const pathC = pth.join(root, "tmp", "test-lock-acquire-all-independent", "c");
+
+    const acquireAllId = await rootManager.acquireAll([pathA, pathB]);
+
+    let writeAResolved = false;
+    const writeAPromise = rootManager.acquire(pathA, "write");
+    void writeAPromise.then(() => {
+      writeAResolved = true;
+    });
+
+    let writeBResolved = false;
+    const writeBPromise = rootManager.acquire(pathB, "write");
+    void writeBPromise.then(() => {
+      writeBResolved = true;
+    });
+
+    let writeCResolved = false;
+    const writeCPromise = rootManager.acquire(pathC, "write");
+    void writeCPromise.then(() => {
+      writeCResolved = true;
+    });
+
+    await tick();
+    assert.strictEqual(writeAResolved, false);
+    assert.strictEqual(writeBResolved, false);
+    assert.strictEqual(writeCResolved, true);
+
+    rootManager.release(acquireAllId);
+    const writeAId = await writeAPromise;
+    const writeBId = await writeBPromise;
+    const writeCId = await writeCPromise;
+    rootManager.release(writeAId);
+    rootManager.release(writeBId);
+    rootManager.release(writeCId);
+  });
+
+  await test("acquireAll treats duplicate paths as a single combined lock target.", async () => {
+    const rootManager = new LockManager({ errorHandler: () => {} });
+    const root = pth.parse(WEB_ROOT).root;
+    const path = pth.join(root, "tmp", "test-lock-acquire-all-duplicate", "a");
+    const otherPath = pth.join(root, "tmp", "test-lock-acquire-all-duplicate", "b");
+
+    let acquireAllResolved = false;
+    const acquireAllPromise = rootManager.acquireAll([path, path]);
+    void acquireAllPromise.then(() => {
+      acquireAllResolved = true;
+    });
+
+    await tick();
+    assert.strictEqual(acquireAllResolved, true);
+
+    const acquireAllId = await acquireAllPromise;
+
+    let conflictingWriteResolved = false;
+    const conflictingWritePromise = rootManager.acquire(path, "write");
+    void conflictingWritePromise.then(() => {
+      conflictingWriteResolved = true;
+    });
+
+    let unrelatedWriteResolved = false;
+    const unrelatedWritePromise = rootManager.acquire(otherPath, "write");
+    void unrelatedWritePromise.then(() => {
+      unrelatedWriteResolved = true;
+    });
+
+    await tick();
+    assert.strictEqual(conflictingWriteResolved, false);
+    assert.strictEqual(unrelatedWriteResolved, true);
+
+    rootManager.release(acquireAllId);
+    const conflictingWriteId = await conflictingWritePromise;
+    const unrelatedWriteId = await unrelatedWritePromise;
+    rootManager.release(conflictingWriteId);
+    rootManager.release(unrelatedWriteId);
+  });
+
+  await test("an earlier conflicting write acquires before a later conflicting acquireAll.", async () => {
+    const rootManager = new LockManager({ errorHandler: () => {} });
+    const root = pth.parse(WEB_ROOT).root;
+    const pathA = pth.join(root, "tmp", "test-lock-acquire-all-fifo", "a");
+    const pathB = pth.join(root, "tmp", "test-lock-acquire-all-fifo", "b");
+    const pathC = pth.join(root, "tmp", "test-lock-acquire-all-fifo", "c");
+
+    const firstAcquireAllId = await rootManager.acquireAll([pathA, pathB]);
+
+    let writeResolved = false;
+    const writePromise = rootManager.acquire(pathA, "write");
+    void writePromise.then(() => {
+      writeResolved = true;
+    });
+
+    let secondAcquireAllResolved = false;
+    const secondAcquireAllPromise = rootManager.acquireAll([pathA, pathC]);
+    void secondAcquireAllPromise.then(() => {
+      secondAcquireAllResolved = true;
+    });
+
+    await tick();
+    assert.strictEqual(writeResolved, false);
+    assert.strictEqual(secondAcquireAllResolved, false);
+
+    rootManager.release(firstAcquireAllId);
+
+    await tick();
+    assert.strictEqual(writeResolved, true);
+    assert.strictEqual(secondAcquireAllResolved, false);
+
+    const writeId = await writePromise;
+    rootManager.release(writeId);
+
+    const secondAcquireAllId = await secondAcquireAllPromise;
+    rootManager.release(secondAcquireAllId);
+  });
+
+  await test("an earlier conflicting acquireAll acquires before a later conflicting write.", async () => {
+    const rootManager = new LockManager({ errorHandler: () => {} });
+    const root = pth.parse(WEB_ROOT).root;
+    const pathA = pth.join(root, "tmp", "test-lock-acquire-all-fifo-reverse", "a");
+    const pathB = pth.join(root, "tmp", "test-lock-acquire-all-fifo-reverse", "b");
+    const pathC = pth.join(root, "tmp", "test-lock-acquire-all-fifo-reverse", "c");
+
+    const firstAcquireAllId = await rootManager.acquireAll([pathA, pathB]);
+
+    let secondAcquireAllResolved = false;
+    const secondAcquireAllPromise = rootManager.acquireAll([pathA, pathC]);
+    void secondAcquireAllPromise.then(() => {
+      secondAcquireAllResolved = true;
+    });
+
+    let writeResolved = false;
+    const writePromise = rootManager.acquire(pathA, "write");
+    void writePromise.then(() => {
+      writeResolved = true;
+    });
+
+    await tick();
+    assert.strictEqual(secondAcquireAllResolved, false);
+    assert.strictEqual(writeResolved, false);
+
+    rootManager.release(firstAcquireAllId);
+
+    await tick();
+    assert.strictEqual(secondAcquireAllResolved, true);
+    assert.strictEqual(writeResolved, false);
+
+    const secondAcquireAllId = await secondAcquireAllPromise;
+    rootManager.release(secondAcquireAllId);
+
+    const writeId = await writePromise;
+    rootManager.release(writeId);
+  });
+});
+
 await suite("HTTP server", async () => {
   before(async () => {
     await fsp.mkdir(WEB_ROOT, { recursive: true });
@@ -458,6 +662,205 @@ await suite("Client (delete)", async () => {
     await fsp.rm(dir, { recursive: true, force: true });
 
     await deleteClient.delete(file, { force: true });
+  });
+});
+
+await suite("Client (rename)", async () => {
+  await test("rename holds conflicting locks on both old and new paths until it completes.", async () => {
+    const renameManager = new LockManager({ errorHandler: () => {} });
+    const renameClient = new Client({ manager: renameManager });
+    const dir = pth.join(WEB_ROOT, "rename", "holds-locks");
+    const srcDir = pth.join(dir, "src");
+    const destDir = pth.join(dir, "dest");
+    const oldPath = pth.join(srcDir, "data.json");
+    const newPath = pth.join(destDir, "data.json");
+
+    await fsp.rm(dir, { recursive: true, force: true });
+    await fsp.mkdir(srcDir, { recursive: true });
+    await fsp.mkdir(destDir, { recursive: true });
+    await fsp.writeFile(oldPath, JSON.stringify({ v: 1 }));
+
+    const renameEntered = deferred<void>();
+    const releaseRename = deferred<void>();
+    const originalRename = mutableFsp.rename;
+    mutableFsp.rename = async (...args: Parameters<typeof fsp.rename>) => {
+      renameEntered.resolve();
+      await releaseRename.promise;
+      return originalRename(...args);
+    };
+
+    try {
+      const renamePromise = renameClient.rename(oldPath, newPath);
+      await renameEntered.promise;
+
+      let oldPathResolved = false;
+      const oldPathPromise = renameManager.acquire(oldPath, "write");
+      void oldPathPromise.then(() => {
+        oldPathResolved = true;
+      });
+
+      let newPathResolved = false;
+      const newPathPromise = renameManager.acquire(newPath, "write");
+      void newPathPromise.then(() => {
+        newPathResolved = true;
+      });
+
+      await new Promise((r) => setImmediate(r));
+      assert.strictEqual(oldPathResolved, false);
+      assert.strictEqual(newPathResolved, false);
+
+      releaseRename.resolve();
+      await renamePromise;
+
+      const oldPathId = await oldPathPromise;
+      const newPathId = await newPathPromise;
+      renameManager.release(oldPathId);
+      renameManager.release(newPathId);
+
+      const renamedData = await renameClient.read(newPath, "utf8");
+      assert.strictEqual(renamedData, JSON.stringify({ v: 1 }));
+      await assert.rejects(renameClient.read(oldPath, "utf8"), /ENOENT|no such file or directory/i);
+    } finally {
+      mutableFsp.rename = originalRename;
+    }
+  });
+
+  await test("rename releases both locks and preserves the source when rename fails.", async () => {
+    const renameManager = new LockManager({ errorHandler: () => {} });
+    const renameClient = new Client({ manager: renameManager });
+    const dir = pth.join(WEB_ROOT, "rename", "rename-failure");
+    const srcDir = pth.join(dir, "src");
+    const destDir = pth.join(dir, "dest");
+    const oldPath = pth.join(srcDir, "data.json");
+    const newPath = pth.join(destDir, "data.json");
+
+    await fsp.rm(dir, { recursive: true, force: true });
+    await fsp.mkdir(srcDir, { recursive: true });
+    await fsp.mkdir(destDir, { recursive: true });
+    await fsp.writeFile(oldPath, JSON.stringify({ v: 1 }));
+
+    const originalRename = mutableFsp.rename;
+    mutableFsp.rename = async () => {
+      throw new Error("Injected rename failure");
+    };
+
+    try {
+      await assert.rejects(renameClient.rename(oldPath, newPath), /Injected rename failure/);
+
+      const oldData = await renameClient.read(oldPath, "utf8");
+      assert.strictEqual(oldData, JSON.stringify({ v: 1 }));
+      await assert.rejects(renameClient.read(newPath, "utf8"), /ENOENT|no such file or directory/i);
+
+      const oldLockId = await renameManager.acquire(oldPath, "write");
+      const newLockId = await renameManager.acquire(newPath, "write");
+      renameManager.release(oldLockId);
+      renameManager.release(newLockId);
+    } finally {
+      mutableFsp.rename = originalRename;
+    }
+  });
+
+  await test("durable rename reports directory sync failure after rename and releases both locks.", async () => {
+    const renameManager = new LockManager({ errorHandler: () => {} });
+    const renameClient = new Client({ manager: renameManager, durable: true });
+    const dir = pth.join(WEB_ROOT, "rename", "durable-sync-failure");
+    const srcDir = pth.join(dir, "src");
+    const destDir = pth.join(dir, "dest");
+    const oldPath = pth.join(srcDir, "data.json");
+    const newPath = pth.join(destDir, "data.json");
+
+    await fsp.rm(dir, { recursive: true, force: true });
+    await fsp.mkdir(srcDir, { recursive: true });
+    await fsp.mkdir(destDir, { recursive: true });
+    await fsp.writeFile(oldPath, JSON.stringify({ v: 1 }));
+
+    await withFailingSyncOnOpen(destDir, new Error("Injected directory sync failure"), async () => {
+      await assert.rejects(renameClient.rename(oldPath, newPath), /Injected directory sync failure/);
+    });
+
+    const renamedData = await renameClient.read(newPath, "utf8");
+    assert.strictEqual(renamedData, JSON.stringify({ v: 1 }));
+    await assert.rejects(renameClient.read(oldPath, "utf8"), /ENOENT|no such file or directory/i);
+
+    const oldLockId = await renameManager.acquire(oldPath, "write");
+    const newLockId = await renameManager.acquire(newPath, "write");
+    renameManager.release(oldLockId);
+    renameManager.release(newLockId);
+  });
+
+  await test("rename on the same path is a no-op and releases the lock.", async () => {
+    const renameManager = new LockManager({ errorHandler: () => {} });
+    const renameClient = new Client({ manager: renameManager });
+    const dir = pth.join(WEB_ROOT, "rename", "same-path");
+    const path = pth.join(dir, "data.json");
+
+    await fsp.rm(dir, { recursive: true, force: true });
+    await fsp.mkdir(dir, { recursive: true });
+    await fsp.writeFile(path, JSON.stringify({ v: 1 }));
+
+    await renameClient.rename(path, path);
+
+    const data = await renameClient.read(path, "utf8");
+    assert.strictEqual(data, JSON.stringify({ v: 1 }));
+
+    const lockId = await renameManager.acquire(path, "write");
+    renameManager.release(lockId);
+  });
+
+  await test("durable rename syncs both source and destination directories on success.", async () => {
+    const renameManager = new LockManager({ errorHandler: () => {} });
+    const renameClient = new Client({ manager: renameManager, durable: true });
+    const dir = pth.join(WEB_ROOT, "rename", "durable-sync-success");
+    const srcDir = pth.join(dir, "src");
+    const destDir = pth.join(dir, "dest");
+    const oldPath = pth.join(srcDir, "data.json");
+    const newPath = pth.join(destDir, "data.json");
+
+    await fsp.rm(dir, { recursive: true, force: true });
+    await fsp.mkdir(srcDir, { recursive: true });
+    await fsp.mkdir(destDir, { recursive: true });
+    await fsp.writeFile(oldPath, JSON.stringify({ v: 1 }));
+
+    const syncCounts = new Map<string, number>([
+      [srcDir, 0],
+      [destDir, 0],
+    ]);
+    const originalOpen = mutableFsp.open;
+    mutableFsp.open = async (...args: Parameters<typeof fsp.open>) => {
+      const handle = await originalOpen(...args);
+      const path = typeof args[0] === "string" ? args[0] : null;
+      if (path === null || !syncCounts.has(path) || args[1] !== "r") {
+        return handle;
+      }
+      return new Proxy(handle, {
+        get(target, prop) {
+          if (prop === "sync") {
+            return async (): Promise<void> => {
+              syncCounts.set(path, (syncCounts.get(path) ?? 0) + 1);
+              await target.sync();
+            };
+          }
+          const value = Reflect.get(target, prop, target) as unknown;
+          if (typeof value !== "function") {
+            return value;
+          }
+          const fn = value as (...args: unknown[]) => unknown;
+          return (...args: unknown[]): unknown => Reflect.apply(fn, target, args);
+        },
+      });
+    };
+
+    try {
+      await renameClient.rename(oldPath, newPath);
+    } finally {
+      mutableFsp.open = originalOpen;
+    }
+
+    const renamedData = await renameClient.read(newPath, "utf8");
+    assert.strictEqual(renamedData, JSON.stringify({ v: 1 }));
+    await assert.rejects(renameClient.read(oldPath, "utf8"), /ENOENT|no such file or directory/i);
+    assert.strictEqual(syncCounts.get(srcDir), 1);
+    assert.strictEqual(syncCounts.get(destDir), 1);
   });
 });
 
