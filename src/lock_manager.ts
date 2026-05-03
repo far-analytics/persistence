@@ -1,6 +1,6 @@
 import * as pth from "node:path";
 
-export interface Artifacts {
+export interface Artifact {
   locks: Promise<unknown>[];
   node: GraphNode;
 }
@@ -31,10 +31,58 @@ export class LockManager {
     this.root = { segment: "", parent: null, children: new Map(), writeTail: null, readTail: null };
   }
 
+  public acquireAll = async (paths: string[]): Promise<number> => {
+    if (paths.length === 0) {
+      throw new Error("Paths must not be empty.");
+    }
+    const acquireId = this.id++;
+    const nodes: GraphNode[] = [];
+    let locks: Promise<unknown>[] = [];
+    try {
+      for (const path of paths) {
+        const artifact = this.collectArtifact(path, "write");
+        nodes.push(artifact.node);
+        locks = locks.concat(artifact.locks);
+      }
+
+      const currentWrite = new Promise<unknown>((r) => {
+        this.idToRelease.set(acquireId, r);
+      });
+
+      for (const node of nodes) {
+        // A subsequent write may not write until all prior reads and writes have completed.
+        const currentWriteTail = (node.writeTail = node.writeTail === null ? currentWrite : node.writeTail.then(() => currentWrite));
+
+        // Prune the graph if a new write has not been acquired for this GraphNode.
+        currentWriteTail
+          .finally(() => {
+            if (node.writeTail === currentWriteTail) {
+              node.writeTail = null;
+              this.prune(node);
+            }
+          })
+          .catch(this.errorHandler);
+      }
+
+      await Promise.all(locks);
+      return acquireId;
+    } catch (err) {
+      const r = this.idToRelease.get(acquireId);
+      if (r) {
+        r();
+      }
+      this.idToRelease.delete(acquireId);
+      for (const node of nodes) {
+        this.prune(node);
+      }
+      throw err;
+    }
+  };
+
   public acquire = async (path: string, type: "read" | "write" | "collect" | "delete"): Promise<number> => {
     const acquireId = this.id++;
     try {
-      const artifacts: Artifacts = this.collectArtifacts(path, type);
+      const artifact: Artifact = this.collectArtifact(path, type);
       switch (type) {
         case "read":
         case "collect": {
@@ -42,7 +90,7 @@ export class LockManager {
             this.idToRelease.set(acquireId, r);
           });
 
-          const currentNode = artifacts.node;
+          const currentNode = artifact.node;
           // A subsequent write may not write until all prior reads have completed.
           const currentReadTail = (currentNode.readTail = currentNode.readTail === null ? currentRead : currentNode.readTail.then(() => currentRead));
 
@@ -56,7 +104,7 @@ export class LockManager {
             })
             .catch(this.errorHandler);
 
-          await Promise.all(artifacts.locks);
+          await Promise.all(artifact.locks);
 
           return acquireId;
         }
@@ -67,7 +115,7 @@ export class LockManager {
           });
 
           // A subsequent write may not write until all prior reads and writes have completed.
-          const currentNode = artifacts.node;
+          const currentNode = artifact.node;
           const currentWriteTail = (currentNode.writeTail = currentNode.writeTail === null ? currentWrite : currentNode.writeTail.then(() => currentWrite));
 
           // Prune the graph if a new write has not been acquired for this GraphNode.
@@ -80,7 +128,7 @@ export class LockManager {
             })
             .catch(this.errorHandler);
 
-          await Promise.all(artifacts.locks);
+          await Promise.all(artifact.locks);
 
           return acquireId;
         }
@@ -119,7 +167,7 @@ export class LockManager {
     }
   };
 
-  protected collectArtifacts = (path: string, type: "read" | "write" | "collect" | "delete"): Artifacts => {
+  protected collectArtifact = (path: string, type: "read" | "write" | "collect" | "delete"): Artifact => {
     const locks: Promise<unknown>[] = [];
     path = pth.resolve(path);
     const root = pth.parse(path).root;
