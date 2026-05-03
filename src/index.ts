@@ -6,7 +6,7 @@
  * manager; this is not OS-level or cross-process locking.
  */
 import { WriteStream, WriteStreamOptions } from "./write_stream.js";
-import { LockManager, LockManagerOptions, Artifacts, GraphNode } from "./lock_manager.js";
+import { LockManager, LockManagerOptions, Artifact, GraphNode } from "./lock_manager.js";
 import {
   Client,
   ClientCollectBufferOptions,
@@ -30,7 +30,7 @@ export {
   ClientCollectStringOptions,
   LockManager,
   LockManagerOptions,
-  Artifacts,
+  Artifact,
   GraphNode,
   WriteStream,
   WriteStreamOptions,
