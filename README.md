@@ -73,6 +73,12 @@ console.log(entries); // ['example.json']
 await client.delete("/tmp/example.json");
 ```
 
+**Rename or move a file**
+
+```ts
+await client.rename("/tmp/example.json", "/tmp/archive/example.json");
+```
+
 **Create a write stream and write to a file**
 
 ```ts
@@ -113,11 +119,11 @@ You can scale clients horizontally if all operations route through one authorita
 
 ## Durability
 
-When a client instance is instantiated with `{ durable: true }`, `client.write` and `client.createWriteStream` flush temp file data before rename and then fsync the parent directory. Likewise, `client.delete` operations fsync the parent directory. Durability guarantees are best‑effort and depend on filesystem and OS behavior. Durability operations have been tested on Linux on ext4; however, fsync may throw `EPERM` on Windows on NTFS.
+When a client instance is instantiated with `{ durable: true }`, `client.write` and `client.createWriteStream` flush temp file data before rename and then fsync the parent directory. Likewise, `client.rename` fsyncs the relevant parent directories, and `client.delete` operations fsync the parent directory. Durability guarantees are best‑effort and depend on filesystem and OS behavior. Durability operations have been tested on Linux on ext4; however, fsync may throw `EPERM` on Windows on NTFS.
 
 Important semantic note:
 
-In durable mode, some operations perform a filesystem mutation first and then execute a final durability step such as fsync on the parent directory. If that final durability step fails, the operation rejects even though the mutation may already be visible on disk. In particular, a durable `client.write` or `client.createWriteStream` may have already renamed the new file into place before rejecting, and a durable `client.delete` may already have removed the target before rejecting. Callers must not interpret every durable-mode rejection as "no change was applied". A rejection can also mean "the mutation was applied, but final durability confirmation failed".
+In durable mode, some operations perform a filesystem mutation first and then execute a final durability step such as fsync on the parent directory. If that final durability step fails, the operation rejects even though the mutation may already be visible on disk. In particular, a durable `client.write`, `client.createWriteStream`, or `client.rename` may already have placed the new file at the target path before rejecting, and a durable `client.delete` may already have removed the target before rejecting. Callers must not interpret every durable-mode rejection as "no change was applied". A rejection can also mean "the mutation was applied, but final durability confirmation failed".
 
 ## Atomicity
 
@@ -127,7 +133,7 @@ Persistence supports atomic-style file replacement via temp file + rename for `w
 
 - The directory structure that Persistence operates on is assumed to be hierarchical.
 - Hence, symlinks/aliases are not supported.
-- Filesystem root-path operations (i.e., operations on `/` or `C:\`) are restricted: `client.collect(root)` is supported, but `client.read(root)`, `client.createReadStream(root)`, `client.write(root)`, `client.createWriteStream(root)`, and `client.delete(root)` are not.
+- Filesystem root-path operations (i.e., operations on `/` or `C:\`) are restricted: `client.collect(root)` is supported, but `client.read(root)`, `client.createReadStream(root)`, `client.write(root)`, `client.createWriteStream(root)`, `client.rename(root, path)`, `client.rename(path, root)`, and `client.delete(root)` are not.
 - Distributed locking or coordination across multiple independent `LockManager` instances is not supported.
 - No protection against external processes that bypass the client and write directly to disk.
 - When durability is enabled, fsync on directories is considered best‑effort and behaves differently on different filesystems.
@@ -143,7 +149,7 @@ The _Persistence_ API provides a client and path-aware lock manager that coordin
 
 - options `<ClientOptions>` Options passed to the `Client`.
   - manager `<LockManager>` The lock manager instance used to coordinate access.
-  - durable `<boolean>` If `true`, use stronger durability behavior for filesystem mutations: `client.write` and `client.createWriteStream` flush the temp file before rename and then fsync the parent directory. Likewise, `client.delete` operations fsync the parent directory. **Default: `false`**
+- durable `<boolean>` If `true`, use stronger durability behavior for filesystem mutations: `client.write` and `client.createWriteStream` flush the temp file before rename and then fsync the parent directory. Likewise, `client.rename` fsyncs the relevant parent directories, and `client.delete` operations fsync the parent directory. **Default: `false`**
 
 Use a `Client` instance to read, write, list, and delete files with hierarchical locking.
 
@@ -258,6 +264,23 @@ Notes:
 - If that post-rename fsync fails in durable mode, the stream rejects even though the target path may already contain the new data.
 - The lock is held for the entire stream lifetime, so long-running writes will block **_conflicting_** operations.
 
+_public_ **client.rename(oldPath, newPath)**
+
+- oldPath `<string>` An absolute source path.
+- newPath `<string>` An absolute destination path.
+
+Returns: `<Promise<void>>`
+
+Renames or moves a file by coordinating both paths through one combined lock acquisition.
+
+Notes:
+
+- Both paths must be absolute.
+- The lock is held across both `oldPath` and `newPath` for the full operation.
+- A same-path rename is treated as a no-op.
+- In durable mode, `client.rename` fsyncs the source and destination parent directories after rename.
+- If that post-rename durability step fails, the promise rejects even though the file may already have moved to `newPath`.
+
 _public_ **client.delete(path, options?)**
 
 - path `<string>` An absolute path to a file or directory.
@@ -318,9 +341,9 @@ The root node of the internal lock graph.
 - writeTail `<Promise<unknown> | null>` Tail promise for write locks.
 - readTail `<Promise<unknown> | null>` Tail promise for read locks.
 
-### The Artifacts interface
+### The Artifact interface
 
-#### Artifacts
+#### Artifact
 
 - locks `<Array<Promise<unknown>>>` Promises the lock acquisition must await.
 - node `<GraphNode>` The graph node for the path.
