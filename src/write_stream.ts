@@ -5,6 +5,7 @@ import { LockManager } from "./lock_manager.js";
 import { finished } from "node:stream/promises";
 import { ClientCreateWriteStreamOptions } from "./client.js";
 import { once } from "node:events";
+import { makePathDurable } from "./common.js";
 
 export interface WriteStreamOptions {
   durable: boolean;
@@ -82,12 +83,7 @@ export class WriteStream extends stream.Writable {
         await finished(this.fsWriteStream);
         await fsp.rename(this.tempPath, this.path);
         if (this.durable) {
-          const fh = await fsp.open(this.dir, "r");
-          try {
-            await fh.sync();
-          } finally {
-            await fh.close();
-          }
+          await makePathDurable(this.dir);
         }
         callback();
       } catch (err) {
