@@ -153,13 +153,13 @@ The _Persistence_ API provides a client and path-aware lock manager that coordin
 
 Use a `Client` instance to read, write, list, and delete files with hierarchical locking.
 
-_public_ **client.durable**
+**client.durable**
 
 - `<boolean>`
 
 Whether durability mode is enabled for the client.
 
-_public_ **client.collect(path, options)**
+**client.collect(path, options)**
 
 - path `<string>` An absolute path to a directory.
 - options `<ClientCollectDirentOptions>`
@@ -169,7 +169,7 @@ _public_ **client.collect(path, options)**
 
 Returns: `<Promise<Array<fs.Dirent<Buffer<ArrayBuffer>>>>>`
 
-_public_ **client.collect(path, options?)**
+**client.collect(path, options?)**
 
 - path `<string>` An absolute path to a directory.
 - options `<ClientCollectStringOptions>`
@@ -179,7 +179,7 @@ _public_ **client.collect(path, options?)**
 
 Returns: `<Promise<Array<string>>>`
 
-_public_ **client.collect(path, options)**
+**client.collect(path, options)**
 
 - path `<string>` An absolute path to a directory.
 - options `<ClientCollectBufferOptions>`
@@ -193,7 +193,7 @@ Lists the entries in a directory. All paths must be absolute.
 
 `client.collect` supports filesystem root paths such as `/` on POSIX systems or a volume root such as `C:\` on Windows.
 
-_public_ **client.read(path, options)**
+**client.read(path, options)**
 
 - path `<string>` An absolute path to a file.
 - options `<ClientReadStringOptions>`
@@ -202,7 +202,7 @@ _public_ **client.read(path, options)**
 
 Returns: `<Promise<string>>`
 
-_public_ **client.read(path, options?)**
+**client.read(path, options?)**
 
 - path `<string>` An absolute path to a file.
 - options `<ClientReadBufferOptions>`
@@ -213,7 +213,7 @@ Returns: `<Promise<Buffer<ArrayBuffer>>>`
 
 Reads a file. All paths must be absolute.
 
-_public_ **client.createReadStream(path, options?)**
+**client.createReadStream(path, options?)**
 
 - path `<string>` An absolute path to a file.
 - options `<ClientCreateReadStreamOptions | BufferEncoding>`
@@ -228,7 +228,7 @@ Returns: `<Promise<fs.ReadStream>>`
 
 Creates a read stream and holds a read lock for the stream lifetime. Persistence supports the subset of `fs.createReadStream` options listed above.
 
-_public_ **client.write(path, data, options?)**
+**client.write(path, data, options?)**
 
 - path `<string>` An absolute path to a file.
 - data `<string | Buffer | TypedArray | DataView | Iterable | AsyncIterable | Stream>` Data to write.
@@ -243,7 +243,7 @@ Writes a file using a temp file + rename. In durable mode, `client.write` flushe
 
 In durable mode, a rejection does not always mean the old file is still in place. If the post-rename directory fsync fails, the promise rejects even though the rename may already have committed the new file at the target path.
 
-_public_ **client.createWriteStream(path, options?)**
+**client.createWriteStream(path, options?)**
 
 - path `<string>` An absolute path to a file.
 - options `<ClientCreateWriteStreamOptions | BufferEncoding>`
@@ -264,7 +264,7 @@ Notes:
 - If that post-rename fsync fails in durable mode, the stream rejects even though the target path may already contain the new data.
 - The lock is held for the entire stream lifetime, so long-running writes will block **_conflicting_** operations.
 
-_public_ **client.rename(oldPath, newPath)**
+**client.rename(oldPath, newPath)**
 
 - oldPath `<string>` An absolute source path.
 - newPath `<string>` An absolute destination path.
@@ -281,7 +281,7 @@ Notes:
 - In durable mode, `client.rename` fsyncs the source and destination parent directories after rename.
 - If that post-rename durability step fails, the promise rejects even though the file may already have moved to `newPath`.
 
-_public_ **client.delete(path, options?)**
+**client.delete(path, options?)**
 
 - path `<string>` An absolute path to a file or directory.
 - options `<fs.RmOptions>`
@@ -306,7 +306,7 @@ In durable mode, a rejection does not always mean the target still exists. If re
 
 Creates a hierarchical lock manager. The lock manager enforces per-operation locking for reads, writes, collects, and deletes.
 
-_public_ **lockManager.acquire(path, type)**
+**lockManager.acquire(path, type)**
 
 - path `<string>` An absolute path.
 - type `<"read" | "write" | "collect" | "delete">` The type of lock to acquire.
@@ -317,7 +317,7 @@ Acquires a lock for a path and returns a lock id. Reads may overlap other reads;
 
 Filesystem root paths are supported for `type === "collect"`. Filesystem root paths are not supported for `type === "read"`, `type === "write"`, or `type === "delete"`.
 
-_public_ **lockManager.release(id)**
+**lockManager.release(id)**
 
 - id `<number>` A lock id previously returned by `acquire`.
 
@@ -325,7 +325,7 @@ Returns: `<void>`
 
 Releases a lock by id.
 
-_public_ **lockManager.root**
+**lockManager.root**
 
 - `<GraphNode>`
 
