@@ -327,6 +327,11 @@ await suite("LockManager", async () => {
 await suite("LockManager (acquireAll)", async () => {
   const tick = () => new Promise((r) => setImmediate(r));
 
+  await test("acquireAll rejects empty input.", async () => {
+    const rootManager = new LockManager({ errorHandler: () => {} });
+    await assert.rejects(rootManager.acquireAll([]), /Paths must not be empty\./);
+  });
+
   await test("acquireAll prunes partial graph state when a later path is invalid.", async () => {
     const rootManager = new LockManager({ errorHandler: () => {} });
     const root = pth.parse(WEB_ROOT).root;
@@ -861,6 +866,56 @@ await suite("Client (rename)", async () => {
     await assert.rejects(renameClient.read(oldPath, "utf8"), /ENOENT|no such file or directory/i);
     assert.strictEqual(syncCounts.get(srcDir), 1);
     assert.strictEqual(syncCounts.get(destDir), 1);
+  });
+
+  await test("rename creates missing destination parent directories.", async () => {
+    for (const durable of [false, true]) {
+      const renameManager = new LockManager({ errorHandler: () => {} });
+      const renameClient = new Client({ manager: renameManager, durable });
+      const dir = pth.join(WEB_ROOT, "rename", `create-parent-${durable ? "durable" : "plain"}`);
+      const srcDir = pth.join(dir, "src");
+      const missingDestDir = pth.join(dir, "missing", "dest");
+      const oldPath = pth.join(srcDir, "data.json");
+      const newPath = pth.join(missingDestDir, "data.json");
+
+      await fsp.rm(dir, { recursive: true, force: true });
+      await fsp.mkdir(srcDir, { recursive: true });
+      await fsp.writeFile(oldPath, JSON.stringify({ v: 1 }));
+
+      await renameClient.rename(oldPath, newPath);
+
+      const renamedData = await renameClient.read(newPath, "utf8");
+      assert.strictEqual(renamedData, JSON.stringify({ v: 1 }));
+      await assert.rejects(renameClient.read(oldPath, "utf8"), /ENOENT|no such file or directory/i);
+    }
+  });
+
+  await test("rename with a missing source rejects without creating the destination parent directory.", async () => {
+    for (const durable of [false, true]) {
+      const renameManager = new LockManager({ errorHandler: () => {} });
+      const renameClient = new Client({ manager: renameManager, durable });
+      const dir = pth.join(WEB_ROOT, "rename", `missing-source-${durable ? "durable" : "plain"}`);
+      const srcDir = pth.join(dir, "src");
+      const missingDestDir = pth.join(dir, "missing", "dest");
+      const oldPath = pth.join(srcDir, "missing.json");
+      const newPath = pth.join(missingDestDir, "data.json");
+
+      await fsp.rm(dir, { recursive: true, force: true });
+      await fsp.mkdir(srcDir, { recursive: true });
+
+      await assert.rejects(renameClient.rename(oldPath, newPath), /ENOENT|no such file or directory/i);
+
+      const destinationParentExists = await fsp
+        .stat(missingDestDir)
+        .then(() => true)
+        .catch((err: unknown) => {
+          if (err instanceof Error && "code" in err && err.code === "ENOENT") {
+            return false;
+          }
+          throw err;
+        });
+      assert.strictEqual(destinationParentExists, false);
+    }
   });
 });
 
