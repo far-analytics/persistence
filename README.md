@@ -143,6 +143,8 @@ Persistence supports atomic-style file replacement via temp file + rename for `w
 
 The _Persistence_ API provides a client and path-aware lock manager that coordinates operations.
 
+For advanced use cases, the package also exports low-level durability helpers. These are primarily intended for custom `Client` subclasses or other code that needs to build coordinated filesystem mutations on top of the same primitives.
+
 ### The Client class
 
 #### new Client(options)
@@ -241,6 +243,8 @@ Returns: `<Promise<void>>`
 
 Writes a file using a temp file + rename. In durable mode, `client.write` flushes the temp file before rename and fsyncs the parent directory after rename.
 
+Missing parent directories for the target path are created automatically.
+
 In durable mode, a rejection does not always mean the old file is still in place. If the post-rename directory fsync fails, the promise rejects even though the rename may already have committed the new file at the target path.
 
 **client.createWriteStream(path, options?)**
@@ -258,6 +262,7 @@ Creates an atomic write stream abstraction backed by a temp file + rename and ho
 
 Notes:
 
+- Missing parent directories for the target path are created automatically before the stream is opened.
 - The stream writes to a temp file in the target directory and renames it into place before `finish` is emitted.
 - On success, `finish` means the write has been committed.
 - In durable mode, the parent directory is fsync'd after rename.
@@ -278,6 +283,8 @@ Notes:
 - Both paths must be absolute.
 - The lock is held across both `oldPath` and `newPath` for the full operation.
 - A same-path rename is treated as a no-op.
+- Missing parent directories for `newPath` are created automatically.
+- If `oldPath` does not exist, the operation rejects without creating the destination parent directory.
 - In durable mode, `client.rename` fsyncs the source and destination parent directories after rename.
 - If that post-rename durability step fails, the promise rejects even though the file may already have moved to `newPath`.
 
@@ -317,6 +324,21 @@ Acquires a lock for a path and returns a lock id. Reads may overlap other reads;
 
 Filesystem root paths are supported for `type === "collect"`. Filesystem root paths are not supported for `type === "read"`, `type === "write"`, or `type === "delete"`.
 
+**lockManager.acquireAll(paths)**
+
+- paths `<Array<string>>` Absolute paths to acquire as one combined write lock set.
+
+Returns: `<Promise<number>>`
+
+Acquires write-style locks for all listed paths under one shared lock id. This is primarily useful for multi-path mutations such as `rename`, where conflicting operations on either path should wait until the combined operation completes.
+
+Notes:
+
+- `paths` must not be empty.
+- All paths must be absolute.
+- Duplicate paths are treated as one combined lock target.
+- Acquisition is coordinated under one shared lock id, so callers should release it once with `lockManager.release(id)`.
+
 **lockManager.release(id)**
 
 - id `<number>` A lock id previously returned by `acquire`.
@@ -330,6 +352,28 @@ Releases a lock by id.
 - `<GraphNode>`
 
 The root node of the internal lock graph.
+
+### Advanced Helpers
+
+These helpers are exported for low-level consumers who want to subclass `Client` or compose custom filesystem operations with the same durability steps used internally by the package.
+
+**makeDurablePath(path)**
+
+- path `<string>` A target path whose parent directory chain should exist.
+
+Returns: `<Promise<void>>`
+
+Ensures the parent directory chain for `path` exists. When a missing directory is created, the helper fsyncs its parent directory before proceeding. This is mainly useful for durable mutation flows that need to create missing parent directories before writing or streaming to a target path.
+
+**makePathDurable(path, options?)**
+
+- path `<string>` A path to fsync.
+- options `<{ force: boolean }>`
+  - force `<boolean>` If `true`, ignore `ENOENT` when opening `path`.
+
+Returns: `<Promise<void>>`
+
+Opens `path`, fsyncs it, and then closes it. This is mainly useful for durable-mode cleanup or post-mutation confirmation steps such as fsyncing a parent directory after `rename`, `write`, or `delete`.
 
 ### The GraphNode interface
 
