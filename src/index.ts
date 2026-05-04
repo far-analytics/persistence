@@ -7,6 +7,7 @@
  */
 import { WriteStream, WriteStreamOptions } from "./write_stream.js";
 import { LockManager, LockManagerOptions, Artifact, GraphNode } from "./lock_manager.js";
+import { makePathDurable, makeDurablePath } from "./common.js";
 import {
   Client,
   ClientCollectBufferOptions,
@@ -41,4 +42,6 @@ export {
   ClientCreateWriteStreamOptions,
   ClientWriteOptions,
   ClientOptions,
+  makeDurablePath,
+  makePathDurable,
 };
