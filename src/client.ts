@@ -6,6 +6,7 @@ import { once } from "node:events";
 import { LockManager } from "./lock_manager.js";
 import { Abortable } from "node:events";
 import { WriteStream } from "./write_stream.js";
+import { makePathDurable, makeDurablePath } from "./common.js";
 
 export interface ClientCreateReadStreamOptions {
   end?: number | undefined;
@@ -120,16 +121,16 @@ export class Client {
     }
     const id = await this.manager.acquireAll(paths);
     try {
+      await fsp.access(oldPath, fs.constants.F_OK);
+      if (this.durable) {
+        await makeDurablePath(newPath);
+      } else {
+        await fsp.mkdir(pth.dirname(newPath), { recursive: true });
+      }
       await fsp.rename(oldPath, newPath);
       if (this.durable) {
         for (const path of paths) {
-          const dir = pth.dirname(path);
-          const fh = await fsp.open(dir, "r");
-          try {
-            await fh.sync();
-          } finally {
-            await fh.close();
-          }
+          await makePathDurable(pth.dirname(path));
         }
       }
     } finally {
@@ -147,20 +148,7 @@ export class Client {
       await fsp.rm(path, options);
       if (this.durable) {
         const dir = pth.dirname(path);
-        let fh;
-        try {
-          fh = await fsp.open(dir, "r");
-        } catch (err) {
-          if (options?.force && err instanceof Error && "code" in err && err.code === "ENOENT") {
-            return;
-          }
-          throw err;
-        }
-        try {
-          await fh.sync();
-        } finally {
-          await fh.close();
-        }
+        await makePathDurable(dir, { force: options?.force ?? false });
       }
     } finally {
       this.manager.release(id);
@@ -226,35 +214,11 @@ export class Client {
     path = pth.resolve(path);
     const id = await this.manager.acquire(path, "write");
     try {
+      const dir = pth.dirname(path);
+      const tempFile = `.${crypto.randomUUID()}`;
+      const tempPath = pth.join(dir, tempFile);
       if (this.durable) {
-        const parsed = pth.parse(path);
-        const root = parsed.root;
-        const dir = parsed.dir;
-        const segments = dir.slice(root.length).split(pth.sep).filter(Boolean);
-        let current = root;
-        let parent: string;
-        for (const segment of segments) {
-          parent = current;
-          current = pth.join(current, segment);
-          try {
-            await fsp.mkdir(current, {
-              recursive: false,
-            });
-            const fh = await fsp.open(parent, "r");
-            try {
-              await fh.sync();
-            } finally {
-              await fh.close();
-            }
-          } catch (err) {
-            if (!(err instanceof Error && "code" in err && err.code == "EEXIST")) {
-              throw err;
-            }
-          }
-        }
-
-        const tempFile = `.${crypto.randomUUID()}`;
-        const tempPath = pth.join(dir, tempFile);
+        await makeDurablePath(path);
         try {
           await fsp.writeFile(tempPath, data, writeFileOptions);
           await fsp.rename(tempPath, path);
@@ -262,19 +226,11 @@ export class Client {
           await fsp.rm(tempPath, { force: true });
           throw err;
         }
-        const fh = await fsp.open(dir, "r");
-        try {
-          await fh.sync();
-        } finally {
-          await fh.close();
-        }
+        await makePathDurable(dir);
       } else {
-        const dir = pth.dirname(path);
         await fsp.mkdir(dir, {
           recursive: true,
         });
-        const tempFile = `.${crypto.randomUUID()}`;
-        const tempPath = pth.join(dir, tempFile);
         try {
           await fsp.writeFile(tempPath, data, writeFileOptions);
           await fsp.rename(tempPath, path);
@@ -304,28 +260,7 @@ export class Client {
           };
     try {
       if (this.durable) {
-        const parsed = pth.parse(path);
-        const root = parsed.root;
-        const segments = parsed.dir.slice(root.length).split(pth.sep).filter(Boolean);
-        let current = root;
-        let parent: string;
-        for (const segment of segments) {
-          parent = current;
-          current = pth.join(current, segment);
-          try {
-            await fsp.mkdir(current, { recursive: false });
-            const fh = await fsp.open(parent, "r");
-            try {
-              await fh.sync();
-            } finally {
-              await fh.close();
-            }
-          } catch (err) {
-            if (!(err instanceof Error && "code" in err && err.code == "EEXIST")) {
-              throw err;
-            }
-          }
-        }
+        await makeDurablePath(path);
       } else {
         await fsp.mkdir(dir, { recursive: true });
       }
