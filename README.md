@@ -155,7 +155,7 @@ For advanced use cases, the package also exports low-level durability helpers an
 
 - options `<ClientOptions>` Options passed to the `Client`.
   - manager `<LockManager>` The lock manager instance used to coordinate access.
-- durable `<boolean>` If `true`, use stronger durability behavior for filesystem mutations: `client.write` and `client.createWriteStream` flush the temp file before rename and then fsync the parent directory. Likewise, `client.rename` fsyncs the relevant parent directories, and `client.delete` operations fsync the parent directory. **Default: `false`**
+  - durable `<boolean>` If `true`, use stronger durability behavior for filesystem mutations: `client.write` and `client.createWriteStream` flush the temp file before rename and then fsync the parent directory. Likewise, `client.rename` fsyncs the relevant parent directories, and `client.delete` operations fsync the parent directory. **Default: `false`**
 
 Use a `Client` instance to read, write, list, rename, and delete files with hierarchical locking.
 
