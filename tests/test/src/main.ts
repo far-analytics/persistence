@@ -261,7 +261,7 @@ await suite("LockManager", async () => {
     manager.release(w2Id);
   });
 
-  await test("Collect behaves like read (blocks on write).", async () => {
+  await test("collect behaves like read (blocks on write).", async () => {
     const path = "/tmp/test-lock-collect";
     const w1 = await manager.acquire(path, "write");
     let collectResolved = false;
@@ -276,7 +276,7 @@ await suite("LockManager", async () => {
     manager.release(cId);
   });
 
-  await test("Collect on root blocks descendant writes until released.", async () => {
+  await test("collect on root blocks descendant writes until released.", async () => {
     const rootManager = new LockManager({ errorHandler: () => {} });
     const root = pth.parse(WEB_ROOT).root;
     const childPath = pth.join(root, "tmp", "test-lock-root-collect");
