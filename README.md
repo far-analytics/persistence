@@ -114,8 +114,8 @@ Please see the Node.js [example](https://github.com/far-analytics/persistence/tr
 
 - Per-operation hierarchical locking within a single `LockManager` instance.
 - Write partitioned FIFO: for any two conflicting operations where at least one is a write, acquisition respects arrival order.
-- Read/collect operations can overlap other reads on the same path or within the same ancestor/descendant subtree.
-- Write/delete operations are exclusive: a write on a path excludes all reads and writes on that path and any ancestor/descendant paths until the write is complete.
+- Read operations can overlap other reads on the same path or within the same ancestor/descendant subtree.
+- Write operations are exclusive: a write on a path excludes all reads and writes on that path and any ancestor/descendant paths until the write is complete.
 
 ## Horizontal scaling
 
@@ -157,7 +157,7 @@ For advanced use cases, the package also exports low-level durability helpers. T
   - manager `<LockManager>` The lock manager instance used to coordinate access.
 - durable `<boolean>` If `true`, use stronger durability behavior for filesystem mutations: `client.write` and `client.createWriteStream` flush the temp file before rename and then fsync the parent directory. Likewise, `client.rename` fsyncs the relevant parent directories, and `client.delete` operations fsync the parent directory. **Default: `false`**
 
-Use a `Client` instance to read, write, list, and delete files with hierarchical locking.
+Use a `Client` instance to read, write, list, rename, and delete files with hierarchical locking.
 
 **client.durable**
 
@@ -315,18 +315,18 @@ In durable mode, a rejection does not always mean the target still exists. If re
 - options `<LockManagerOptions>` Optional options passed to the `LockManager`.
   - errorHandler `<typeof console.error>` **Default:** `console.error`.
 
-Creates a hierarchical lock manager. The lock manager enforces per-operation locking for reads, writes, collects, and deletes.
+Creates a hierarchical lock manager. The lock manager enforces per-operation locking for reads and writes across hierarchical paths.
 
 **lockManager.acquire(path, type)**
 
 - path `<string>` An absolute path.
-- type `<"read" | "write" | "collect" | "delete">` The type of lock to acquire.
+- type `<"read" | "write">` The type of lock to acquire.
 
 Returns: `<Promise<number>>`
 
 Acquires a lock for a path and returns a lock id. Reads may overlap other reads; writes are exclusive across ancestors and descendants.
 
-Filesystem root paths are supported for `type === "collect"`. Filesystem root paths are not supported for `type === "read"`, `type === "write"`, or `type === "delete"`.
+Filesystem root paths are supported for `type === "read"`. Filesystem root paths are not supported for `type === "write"`.
 
 **lockManager.acquireAll(paths)**
 
@@ -340,6 +340,7 @@ Notes:
 
 - `paths` must not be empty.
 - All paths must be absolute.
+- Filesystem root paths are not supported.
 - Duplicate paths are treated as one combined lock target.
 - Acquisition is coordinated under one shared lock id, so callers should release it once with `lockManager.release(id)`.
 
