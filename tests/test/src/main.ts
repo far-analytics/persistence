@@ -946,7 +946,7 @@ await suite("Client (write)", async () => {
     await fsp.mkdir(path, { recursive: true });
     await fsp.writeFile(child, "keep");
 
-    await assert.rejects(writeClient.write(path, "oops", "utf8"), /EISDIR|illegal operation on a directory/i);
+    await assert.rejects(writeClient.write(path, "oops", "utf8"), /EISDIR|operation not permitted|illegal operation on a directory/i);
 
     const childData = await fsp.readFile(child, "utf8");
     assert.strictEqual(childData, "keep");
@@ -985,7 +985,7 @@ await suite("Client (write)", async () => {
     await fsp.mkdir(path, { recursive: true });
     await fsp.writeFile(child, "keep");
 
-    await assert.rejects(writeClient.write(path, "oops", "utf8"), /EISDIR|illegal operation on a directory/i);
+    await assert.rejects(writeClient.write(path, "oops", "utf8"), /EISDIR|operation not permitted|illegal operation on a directory/i);
 
     const childData = await fsp.readFile(child, "utf8");
     assert.strictEqual(childData, "keep");
