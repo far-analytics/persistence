@@ -16,8 +16,11 @@ console.log(JSON.parse(data)); // { message: "Hello, World!" }
 const entries = await client.collect("/tmp", { encoding: "utf8", withFileTypes: false });
 console.log(entries); // ['example.json']
 
+// Rename a file
+await client.rename("/tmp/example.json", "/tmp/archive/example.json");
+
 // Delete a file or directory
-await client.delete("/tmp/example.json");
+await client.delete("/tmp/archive/example.json");
 
 // Create a write stream and write to a file
 const writeStream = await client.createWriteStream("/tmp/example.json");
