@@ -1,6 +1,6 @@
 {
   "name": "@far-analytics/persistence",
-  "version": "1.15.0",
+  "version": "1.16.0",
   "description": "Persistence - a filesystem coordination layer.",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
