@@ -174,85 +174,44 @@ export class LockManager {
     if (path == root && (type == "read" || type == "write" || type == "delete")) {
       throw new Error("Read, write, and delete operations on root are not supported.");
     }
-    switch (type) {
-      case "read":
-      case "collect": {
-        let node: GraphNode = this.root;
-        if (node.writeTail) {
-          locks.push(node.writeTail);
+    let node: GraphNode = this.root;
+    if (node.writeTail) {
+      locks.push(node.writeTail);
+    }
+    if (node.readTail && (type == "write" || type == "delete")) {
+      locks.push(node.readTail);
+    }
+    const segments = path == root ? [path.split(pth.sep)[0]] : path.split(pth.sep);
+    for (const segment of segments) {
+      let child = node.children.get(segment);
+      if (!child) {
+        child = { segment, parent: node, children: new Map(), writeTail: null, readTail: null };
+        node.children.set(segment, child);
+        node = child;
+      } else {
+        if (child.writeTail) {
+          locks.push(child.writeTail);
         }
-        const segments = path == root ? [path.split(pth.sep)[0]] : path.split(pth.sep);
-        for (const segment of segments) {
-          let child = node.children.get(segment);
-          if (!child) {
-            child = { segment, parent: node, children: new Map(), writeTail: null, readTail: null };
-            node.children.set(segment, child);
-            node = child;
-          } else {
-            if (child.writeTail) {
-              locks.push(child.writeTail);
-            }
-            node = child;
-          }
+        if (child.readTail && (type == "write" || type == "delete")) {
+          locks.push(child.readTail);
         }
-
-        let children = [...node.children.values()];
-        while (children.length) {
-          const child = children.pop();
-          if (child) {
-            children = children.concat([...child.children.values()]);
-            if (child.writeTail) {
-              locks.push(child.writeTail);
-            }
-          }
-        }
-        return { locks, node };
-      }
-      case "write":
-      case "delete": {
-        let node: GraphNode = this.root;
-        if (node.writeTail) {
-          locks.push(node.writeTail);
-        }
-        if (node.readTail) {
-          locks.push(node.readTail);
-        }
-        const segments = path == root ? [path.split(pth.sep)[0]] : path.split(pth.sep);
-        for (const segment of segments) {
-          let child = node.children.get(segment);
-          if (!child) {
-            child = { segment, parent: node, children: new Map(), writeTail: null, readTail: null };
-            node.children.set(segment, child);
-            node = child;
-          } else {
-            if (child.writeTail) {
-              locks.push(child.writeTail);
-            }
-            if (child.readTail) {
-              locks.push(child.readTail);
-            }
-            node = child;
-          }
-        }
-
-        let children = [...node.children.values()];
-        while (children.length) {
-          const child = children.pop();
-          if (child) {
-            children = children.concat([...child.children.values()]);
-            if (child.writeTail) {
-              locks.push(child.writeTail);
-            }
-            if (child.readTail) {
-              locks.push(child.readTail);
-            }
-          }
-        }
-        return { locks, node };
-      }
-      default: {
-        throw new Error(`Unexpected lock type: ${String(type)}`);
+        node = child;
       }
     }
+
+    let children = [...node.children.values()];
+    while (children.length) {
+      const child = children.pop();
+      if (child) {
+        children = children.concat([...child.children.values()]);
+        if (child.writeTail) {
+          locks.push(child.writeTail);
+        }
+        if (child.readTail && (type == "write" || type == "delete")) {
+          locks.push(child.readTail);
+        }
+      }
+    }
+    return { locks, node };
   };
 }
