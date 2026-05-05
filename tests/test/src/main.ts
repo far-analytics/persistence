@@ -265,7 +265,7 @@ await suite("LockManager", async () => {
     const path = "/tmp/test-lock-collect";
     const w1 = await manager.acquire(path, "write");
     let collectResolved = false;
-    const cPromise = manager.acquire(path, "collect");
+    const cPromise = manager.acquire(path, "read");
     void cPromise.then(() => {
       collectResolved = true;
     });
@@ -280,7 +280,7 @@ await suite("LockManager", async () => {
     const rootManager = new LockManager({ errorHandler: () => {} });
     const root = pth.parse(WEB_ROOT).root;
     const childPath = pth.join(root, "tmp", "test-lock-root-collect");
-    const c1 = await rootManager.acquire(root, "collect");
+    const c1 = await rootManager.acquire(root, "read");
 
     let writeResolved = false;
     const wPromise = rootManager.acquire(childPath, "write");
@@ -292,15 +292,6 @@ await suite("LockManager", async () => {
     rootManager.release(c1);
     const wId = await wPromise;
     rootManager.release(wId);
-  });
-
-  await test("Read, write, and delete on root are rejected.", async () => {
-    const rootManager = new LockManager({ errorHandler: () => {} });
-    const root = pth.parse(WEB_ROOT).root;
-
-    await assert.rejects(rootManager.acquire(root, "read"), /Read, write, and delete operations on root are not supported\./);
-    await assert.rejects(rootManager.acquire(root, "write"), /Read, write, and delete operations on root are not supported\./);
-    await assert.rejects(rootManager.acquire(root, "delete"), /Read, write, and delete operations on root are not supported\./);
   });
 
   if (process.platform === "win32") {
@@ -322,6 +313,11 @@ await suite("LockManager", async () => {
       rootManager.release(dWrite);
     });
   }
+  await test("Write on root is rejected.", async () => {
+    const rootManager = new LockManager({ errorHandler: () => {} });
+    const root = pth.parse(WEB_ROOT).root;
+    await assert.rejects(rootManager.acquire(root, "write"), /Operation is not supported\./);
+  });
 });
 
 await suite("LockManager (acquireAll)", async () => {
@@ -337,7 +333,7 @@ await suite("LockManager (acquireAll)", async () => {
     const root = pth.parse(WEB_ROOT).root;
     const validPath = pth.join(root, "tmp", "test-lock-acquire-all-cleanup", "a");
 
-    await assert.rejects(rootManager.acquireAll([validPath, root]), /Read, write, and delete operations on root are not supported\./);
+    await assert.rejects(rootManager.acquireAll([validPath, root]), /Operation is not supported\./);
 
     assert.strictEqual(rootManager.root.children.size, 0);
   });
@@ -592,6 +588,14 @@ await suite("Client (durable)", async () => {
   });
 });
 
+await suite("Client (read)", async () => {
+  await test("Read on root is rejected.", async () => {
+    const client = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const root = pth.parse(WEB_ROOT).root;
+    await assert.rejects(client.read(root), /Operations on root are not supported\./);
+  });
+});
+
 await suite("Client (collect)", async () => {
   await test("collect can list the filesystem root.", async () => {
     const collectClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
@@ -634,7 +638,6 @@ await suite("Client (collect)", async () => {
     );
   });
 });
-
 await suite("Client (delete)", async () => {
   await test("delete removes an existing file with durable client.", async () => {
     const deleteClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
