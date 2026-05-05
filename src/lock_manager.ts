@@ -181,7 +181,7 @@ export class LockManager {
         if (node.writeTail) {
           locks.push(node.writeTail);
         }
-        const segments = path == root ? path.split(pth.sep)[0] : path.split(pth.sep);
+        const segments = path == root ? [path.split(pth.sep)[0]] : path.split(pth.sep);
         for (const segment of segments) {
           let child = node.children.get(segment);
           if (!child) {
@@ -217,7 +217,7 @@ export class LockManager {
         if (node.readTail) {
           locks.push(node.readTail);
         }
-        const segments = path == root ? path.split(pth.sep)[0] : path.split(pth.sep);
+        const segments = path == root ? [path.split(pth.sep)[0]] : path.split(pth.sep);
         for (const segment of segments) {
           let child = node.children.get(segment);
           if (!child) {
