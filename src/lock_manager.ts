@@ -1,6 +1,6 @@
 import * as pth from "node:path";
 
-export interface Artifact {
+export interface LocksAndNodesArtifact {
   locks: Promise<unknown>[];
   node: GraphNode;
 }
@@ -40,7 +40,7 @@ export class LockManager {
     let locks: Promise<unknown>[] = [];
     try {
       for (const path of paths) {
-        const artifact = this.collectArtifact(path, "write");
+        const artifact = this.collectLocksAndNodes(path, "write");
         nodes.push(artifact.node);
         locks = locks.concat(artifact.locks);
       }
@@ -82,7 +82,7 @@ export class LockManager {
   public acquire = async (path: string, type: "read" | "write"): Promise<number> => {
     const acquireId = this.id++;
     try {
-      const artifact: Artifact = this.collectArtifact(path, type);
+      const artifact = this.collectLocksAndNodes(path, type);
       switch (type) {
         case "read": {
           const currentRead = new Promise<unknown>((r) => {
@@ -165,7 +165,7 @@ export class LockManager {
     }
   };
 
-  protected collectArtifact = (path: string, type: "read" | "write"): Artifact => {
+  protected collectLocksAndNodes = (path: string, type: "read" | "write"): LocksAndNodesArtifact => {
     const locks: Promise<unknown>[] = [];
     path = pth.resolve(path);
     const root = pth.parse(path).root;
