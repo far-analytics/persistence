@@ -145,9 +145,7 @@ Persistence supports atomic-style file replacement via temp file + rename for `w
 
 ## API
 
-The _Persistence_ API provides a client and path-aware lock manager that coordinates operations.
-
-For advanced use cases, the package also exports low-level durability helpers. These are primarily intended for custom `Client` subclasses or other code that needs to build coordinated filesystem mutations on top of the same primitives.
+The _Persistence_ API provides a client and path-aware lock manager that coordinates operations. For advanced use cases, the package also exports low-level durability helpers and interfaces. These are primarily intended for custom `Client` subclasses or other code that needs to build coordinated filesystem mutations on top of the same primitives.
 
 ### The Client class
 
@@ -390,9 +388,9 @@ Opens `path`, fsyncs it, and then closes it. This is mainly useful for durable-m
 - writeTail `<Promise<unknown> | null>` Tail promise for write locks.
 - readTail `<Promise<unknown> | null>` Tail promise for read locks.
 
-### The Artifact interface
+### The LocksAndNodesArtifact interface
 
-#### Artifact
+#### LocksAndNodesArtifact
 
 - locks `<Array<Promise<unknown>>>` Promises the lock acquisition must await.
 - node `<GraphNode>` The graph node for the path.
