@@ -71,16 +71,16 @@ const entries = await client.collect("/tmp", { encoding: "utf8", withFileTypes: 
 console.log(entries); // ['example.json']
 ```
 
-**Delete a file or directory**
-
-```ts
-await client.delete("/tmp/example.json");
-```
-
 **Rename or move a file**
 
 ```ts
 await client.rename("/tmp/example.json", "/tmp/archive/example.json");
+```
+
+**Delete a file or directory**
+
+```ts
+await client.delete("/tmp/archive/example.json");
 ```
 
 **Create a write stream and write to a file**
