@@ -145,7 +145,9 @@ Persistence supports atomic-style file replacement via temp file + rename for `w
 
 ## API
 
-The _Persistence_ API provides a client and path-aware lock manager that coordinates operations. For advanced use cases, the package also exports low-level durability helpers and interfaces. These are primarily intended for custom `Client` subclasses or other code that needs to build coordinated filesystem mutations on top of the same primitives.
+The _Persistence_ API provides a client and path-aware lock manager that coordinates operations.
+
+For advanced use cases, the package also exports low-level durability helpers and interfaces. These are primarily intended for custom `Client` subclasses or other code that needs to build coordinated filesystem mutations on top of the same primitives.
 
 ### The Client class
 
@@ -437,8 +439,8 @@ For feature requests or issues, please open an [issue](https://github.com/far-an
 
 **Persistence _(noun)_**
 
-*\\pər-ˈsi-stən(t)s\\*<br>
+_\\pər-ˈsi-stən(t)s\\_<br>
 ...<br>
 **2:** Continued effort to achieve something despite difficulties, opposition, or discouragement.  
-*Success achieved through sheer persistence.*<br>
+_Success achieved through sheer persistence._<br>
 ...<br>
