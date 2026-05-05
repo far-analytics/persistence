@@ -87,7 +87,7 @@ export class Client {
       throw new Error("Path must be absolute.");
     }
     path = pth.resolve(path);
-    const id = await this.manager.acquire(path, "collect");
+    const id = await this.manager.acquire(path, "read");
     try {
       // These branches exist to narrow `options` into the correct `fs.promises.readdir`
       // overloads without a type assertion. Runtime behavior is the same in each case.
@@ -110,27 +110,29 @@ export class Client {
     if (!pth.isAbsolute(oldPath)) {
       throw new Error("oldPath must be absolute.");
     }
-
     if (!pth.isAbsolute(newPath)) {
       throw new Error("newPath must be absolute.");
     }
-
-    const paths: string[] = [];
-    for (const path of [oldPath, newPath]) {
-      paths.push(pth.resolve(path));
+    oldPath = pth.resolve(oldPath);
+    newPath = pth.resolve(newPath);
+    const oldPathDir = pth.dirname(oldPath);
+    const newPathDir = pth.dirname(newPath);
+    if (oldPathDir == oldPath || newPathDir == newPath) {
+      throw new Error("Operations on root are not supported.");
     }
+    const paths = [oldPath, newPath];
     const id = await this.manager.acquireAll(paths);
     try {
       await fsp.access(oldPath, fs.constants.F_OK);
       if (this.durable) {
         await makeDurablePath(newPath);
       } else {
-        await fsp.mkdir(pth.dirname(newPath), { recursive: true });
+        await fsp.mkdir(newPathDir, { recursive: true });
       }
       await fsp.rename(oldPath, newPath);
       if (this.durable) {
-        for (const path of paths) {
-          await makePathDurable(pth.dirname(path));
+        for (const path of [oldPathDir, newPathDir]) {
+          await makePathDurable(path);
         }
       }
     } finally {
@@ -143,11 +145,14 @@ export class Client {
       throw new Error("Path must be absolute.");
     }
     path = pth.resolve(path);
-    const id = await this.manager.acquire(path, "delete");
+    const dir = pth.dirname(path);
+    if (dir == path) {
+      throw new Error("Operations on root are not supported.");
+    }
+    const id = await this.manager.acquire(path, "write");
     try {
       await fsp.rm(path, options);
       if (this.durable) {
-        const dir = pth.dirname(path);
         await makePathDurable(dir, { force: options?.force ?? false });
       }
     } finally {
@@ -162,6 +167,10 @@ export class Client {
       throw new Error("Path must be absolute.");
     }
     path = pth.resolve(path);
+    const dir = pth.dirname(path);
+    if (dir == path) {
+      throw new Error("Operations on root are not supported.");
+    }
     const id = await this.manager.acquire(path, "read");
     try {
       return await fsp.readFile(path, options);
@@ -175,6 +184,10 @@ export class Client {
       throw new Error("Path must be absolute.");
     }
     path = pth.resolve(path);
+    const dir = pth.dirname(path);
+    if (dir == path) {
+      throw new Error("Operations on root are not supported.");
+    }
     const id = await this.manager.acquire(path, "read");
     try {
       options =
@@ -207,14 +220,17 @@ export class Client {
     if (!pth.isAbsolute(path)) {
       throw new Error("Path must be absolute.");
     }
+    path = pth.resolve(path);
+    const dir = pth.dirname(path);
+    if (dir == path) {
+      throw new Error("Operations on root are not supported.");
+    }
     const writeFileOptions =
       typeof options == "string"
         ? { encoding: options, flush: this.durable }
         : { ...{ encoding: options?.encoding, mode: options?.mode, signal: options?.signal }, ...{ flush: this.durable } };
-    path = pth.resolve(path);
     const id = await this.manager.acquire(path, "write");
     try {
-      const dir = pth.dirname(path);
       const tempFile = `.${crypto.randomUUID()}`;
       const tempPath = pth.join(dir, tempFile);
       if (this.durable) {
@@ -250,6 +266,9 @@ export class Client {
     }
     path = pth.resolve(path);
     const dir = pth.dirname(path);
+    if (dir == path) {
+      throw new Error("Operations on root are not supported.");
+    }
     const id = await this.manager.acquire(path, "write");
     const writeStreamOptions =
       typeof options == "string"

@@ -79,13 +79,12 @@ export class LockManager {
     }
   };
 
-  public acquire = async (path: string, type: "read" | "write" | "collect" | "delete"): Promise<number> => {
+  public acquire = async (path: string, type: "read" | "write"): Promise<number> => {
     const acquireId = this.id++;
     try {
       const artifact: Artifact = this.collectArtifact(path, type);
       switch (type) {
-        case "read":
-        case "collect": {
+        case "read": {
           const currentRead = new Promise<unknown>((r) => {
             this.idToRelease.set(acquireId, r);
           });
@@ -108,8 +107,7 @@ export class LockManager {
 
           return acquireId;
         }
-        case "write":
-        case "delete": {
+        case "write": {
           const currentWrite = new Promise<unknown>((r) => {
             this.idToRelease.set(acquireId, r);
           });
@@ -167,18 +165,19 @@ export class LockManager {
     }
   };
 
-  protected collectArtifact = (path: string, type: "read" | "write" | "collect" | "delete"): Artifact => {
+  protected collectArtifact = (path: string, type: "read" | "write"): Artifact => {
     const locks: Promise<unknown>[] = [];
     path = pth.resolve(path);
     const root = pth.parse(path).root;
-    if (path == root && (type == "read" || type == "write" || type == "delete")) {
-      throw new Error("Read, write, and delete operations on root are not supported.");
+    // This is a defensive check.
+    if (path == root && type != "read") {
+      throw new Error("Operation is not supported.");
     }
     let node: GraphNode = this.root;
     if (node.writeTail) {
       locks.push(node.writeTail);
     }
-    if (node.readTail && (type == "write" || type == "delete")) {
+    if (node.readTail && type == "write") {
       locks.push(node.readTail);
     }
     const segments = path == root ? [path.split(pth.sep)[0]] : path.split(pth.sep);
@@ -192,7 +191,7 @@ export class LockManager {
         if (child.writeTail) {
           locks.push(child.writeTail);
         }
-        if (child.readTail && (type == "write" || type == "delete")) {
+        if (child.readTail && type == "write") {
           locks.push(child.readTail);
         }
         node = child;
@@ -207,7 +206,7 @@ export class LockManager {
         if (child.writeTail) {
           locks.push(child.writeTail);
         }
-        if (child.readTail && (type == "write" || type == "delete")) {
+        if (child.readTail && type == "write") {
           locks.push(child.readTail);
         }
       }
