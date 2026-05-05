@@ -35,6 +35,8 @@ Persistence is a filesystem coordination layer. It provides hierarchical read/wr
 npm install @far-analytics/persistence
 ```
 
+### Requirements
+
 Node.js `20.10.0` or newer is required.
 
 ## Usage
