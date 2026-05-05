@@ -37,6 +37,18 @@ const entries = await client.collect("/tmp", { encoding: "utf8", withFileTypes: 
 console.log(entries); // ['example.json']
 ```
 
+#### Rename a file.
+
+```ts
+await client.rename("/tmp/example.json", "/tmp/archive/example.json");
+```
+
+#### Delete a file.
+
+```ts
+await client.delete("/tmp/archive/example.json");
+```
+
 #### Stream a write and read it back.
 
 ```ts
