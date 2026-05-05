@@ -433,10 +433,12 @@ For feature requests or issues, please open an [issue](https://github.com/far-an
 
 - [Adam Patterson](https://github.com/adpatter)
 
+<br>
 
 **Persistence _(noun)_**
 
-*\\pər-ˈsi-stən(t)s\\*
-
+*\\pər-ˈsi-stən(t)s\\*<br>
+...<br>
 **2:** Continued effort to achieve something despite difficulties, opposition, or discouragement.  
 *Success achieved through sheer persistence.*
+...<br>
