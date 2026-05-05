@@ -28,6 +28,7 @@ Persistence is a filesystem coordination layer. It provides hierarchical read/wr
 - [Versioning](#versioning)
 - [Tests](#tests)
 - [Support](#support)
+- [Colophon](#colophon)
 
 ## Installation
 
@@ -435,7 +436,7 @@ For feature requests or issues, please open an [issue](https://github.com/far-an
 
 - [Adam Patterson](https://github.com/adpatter)
 
-<br>
+## Colophon
 
 **Persistence _(noun)_**
 
