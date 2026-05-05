@@ -337,10 +337,7 @@ await suite("LockManager (acquireAll)", async () => {
     const root = pth.parse(WEB_ROOT).root;
     const validPath = pth.join(root, "tmp", "test-lock-acquire-all-cleanup", "a");
 
-    await assert.rejects(
-      rootManager.acquireAll([validPath, root]),
-      /Read, write, and delete operations on root are not supported\./,
-    );
+    await assert.rejects(rootManager.acquireAll([validPath, root]), /Read, write, and delete operations on root are not supported\./);
 
     assert.strictEqual(rootManager.root.children.size, 0);
   });
@@ -869,25 +866,45 @@ await suite("Client (rename)", async () => {
   });
 
   await test("rename creates missing destination parent directories.", async () => {
-    for (const durable of [false, true]) {
-      const renameManager = new LockManager({ errorHandler: () => {} });
-      const renameClient = new Client({ manager: renameManager, durable });
-      const dir = pth.join(WEB_ROOT, "rename", `create-parent-${durable ? "durable" : "plain"}`);
-      const srcDir = pth.join(dir, "src");
-      const missingDestDir = pth.join(dir, "missing", "dest");
-      const oldPath = pth.join(srcDir, "data.json");
-      const newPath = pth.join(missingDestDir, "data.json");
+    const durable = false;
+    const renameManager = new LockManager({ errorHandler: () => {} });
+    const renameClient = new Client({ manager: renameManager, durable });
+    const dir = pth.join(WEB_ROOT, "rename", `create-parent-plain`);
+    const srcDir = pth.join(dir, "src");
+    const missingDestDir = pth.join(dir, "missing", "dest");
+    const oldPath = pth.join(srcDir, "data.json");
+    const newPath = pth.join(missingDestDir, "data.json");
 
-      await fsp.rm(dir, { recursive: true, force: true });
-      await fsp.mkdir(srcDir, { recursive: true });
-      await fsp.writeFile(oldPath, JSON.stringify({ v: 1 }));
+    await fsp.rm(dir, { recursive: true, force: true });
+    await fsp.mkdir(srcDir, { recursive: true });
+    await fsp.writeFile(oldPath, JSON.stringify({ v: 1 }));
 
-      await renameClient.rename(oldPath, newPath);
+    await renameClient.rename(oldPath, newPath);
 
-      const renamedData = await renameClient.read(newPath, "utf8");
-      assert.strictEqual(renamedData, JSON.stringify({ v: 1 }));
-      await assert.rejects(renameClient.read(oldPath, "utf8"), /ENOENT|no such file or directory/i);
-    }
+    const renamedData = await renameClient.read(newPath, "utf8");
+    assert.strictEqual(renamedData, JSON.stringify({ v: 1 }));
+    await assert.rejects(renameClient.read(oldPath, "utf8"), /ENOENT|no such file or directory/i);
+  });
+
+  await test("Durable rename creates missing destination parent directories.", async () => {
+    const durable = true;
+    const renameManager = new LockManager({ errorHandler: () => {} });
+    const renameClient = new Client({ manager: renameManager, durable });
+    const dir = pth.join(WEB_ROOT, "rename", `create-parent-durable`);
+    const srcDir = pth.join(dir, "src");
+    const missingDestDir = pth.join(dir, "missing", "dest");
+    const oldPath = pth.join(srcDir, "data.json");
+    const newPath = pth.join(missingDestDir, "data.json");
+
+    await fsp.rm(dir, { recursive: true, force: true });
+    await fsp.mkdir(srcDir, { recursive: true });
+    await fsp.writeFile(oldPath, JSON.stringify({ v: 1 }));
+
+    await renameClient.rename(oldPath, newPath);
+
+    const renamedData = await renameClient.read(newPath, "utf8");
+    assert.strictEqual(renamedData, JSON.stringify({ v: 1 }));
+    await assert.rejects(renameClient.read(oldPath, "utf8"), /ENOENT|no such file or directory/i);
   });
 
   await test("rename with a missing source rejects without creating the destination parent directory.", async () => {
