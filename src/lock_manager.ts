@@ -40,7 +40,7 @@ export class LockManager {
     let locks: Promise<unknown>[] = [];
     try {
       for (const path of paths) {
-        const artifact = this.collectLocksAndNodes(path, "write");
+        const artifact = this.collectArtifact(path, "write");
         nodes.push(artifact.node);
         locks = locks.concat(artifact.locks);
       }
@@ -82,7 +82,7 @@ export class LockManager {
   public acquire = async (path: string, type: "read" | "write"): Promise<number> => {
     const acquireId = this.id++;
     try {
-      const artifact = this.collectLocksAndNodes(path, type);
+      const artifact = this.collectArtifact(path, type);
       switch (type) {
         case "read": {
           const currentRead = new Promise<unknown>((r) => {
@@ -165,7 +165,7 @@ export class LockManager {
     }
   };
 
-  protected collectLocksAndNodes = (path: string, type: "read" | "write"): LocksAndNodesArtifact => {
+  protected collectArtifact = (path: string, type: "read" | "write"): LocksAndNodesArtifact => {
     const locks: Promise<unknown>[] = [];
     path = pth.resolve(path);
     const root = pth.parse(path).root;
@@ -174,19 +174,12 @@ export class LockManager {
       throw new Error("Operation is not supported.");
     }
     let node: GraphNode = this.root;
-    if (node.writeTail) {
-      locks.push(node.writeTail);
-    }
-    if (node.readTail && type == "write") {
-      locks.push(node.readTail);
-    }
     const segments = path == root ? [path.split(pth.sep)[0]] : path.split(pth.sep);
     for (const segment of segments) {
       let child = node.children.get(segment);
       if (!child) {
         child = { segment, parent: node, children: new Map(), writeTail: null, readTail: null };
         node.children.set(segment, child);
-        node = child;
       } else {
         if (child.writeTail) {
           locks.push(child.writeTail);
@@ -194,8 +187,8 @@ export class LockManager {
         if (child.readTail && type == "write") {
           locks.push(child.readTail);
         }
-        node = child;
       }
+      node = child;
     }
 
     let children = [...node.children.values()];
