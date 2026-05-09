@@ -381,7 +381,7 @@ Returns: `<Promise<void>>`
 
 Opens `path`, fsyncs it, and then closes it. This is mainly useful for durable-mode cleanup or post-mutation confirmation steps such as fsyncing a parent directory after `rename`, `write`, or `delete`.
 
-### The GraphNode interface
+### The GraphNode class
 
 #### GraphNode
 
@@ -390,10 +390,36 @@ Opens `path`, fsyncs it, and then closes it. This is mainly useful for durable-m
 - children `<Map<string, GraphNode>>` Child nodes keyed by segment.
 - writeTail `<Promise<unknown> | null>` Tail promise for write locks.
 - readTail `<Promise<unknown> | null>` Tail promise for read locks.
+- childWriteTail `<Promise<unknown> | null>` Cached aggregate tail for descendant writes.
+- childReadTail `<Promise<unknown> | null>` Cached aggregate tail for descendant reads.
 
-### The LocksAndNodesArtifact interface
+**graphNode.appendWriteTail(lock)**
 
-#### LocksAndNodesArtifact
+- lock `<Promise<unknown>>`
+
+Chains a write tail onto this node.
+
+**graphNode.appendReadTail(lock)**
+
+- lock `<Promise<unknown>>`
+
+Chains a read tail onto this node.
+
+**graphNode.appendChildWriteTail(lock)**
+
+- lock `<Promise<unknown>>`
+
+Chains a cached aggregate descendant-write tail onto this node.
+
+**graphNode.appendChildReadTail(lock)**
+
+- lock `<Promise<unknown>>`
+
+Chains a cached aggregate descendant-read tail onto this node.
+
+### The Artifact interface
+
+#### Artifact
 
 - locks `<Array<Promise<unknown>>>` Promises the lock acquisition must await.
 - node `<GraphNode>` The graph node for the path.
