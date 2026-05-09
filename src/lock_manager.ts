@@ -7,27 +7,36 @@ export interface Artifact {
 
 export interface GraphNodeOptions {
   segment: string;
-  parent: GraphNode | null;
+  ascendant: GraphNode | null;
+  errorHandler: typeof console.error;
 }
 
 export class GraphNode {
   public segment: string;
-  public parent: GraphNode | null;
-  public children: Map<string, GraphNode>;
+  public ascendant: GraphNode | null;
+  public descendants: Map<string, GraphNode>;
   public writeTail: Promise<unknown> | null;
   public readTail: Promise<unknown> | null;
-  // Cached aggregate blockers for activity somewhere below this node. These are
-  // not exact sets of active descendants; resolved tails may remain until prune.
-  public childWriteTail: Promise<unknown> | null;
-  public childReadTail: Promise<unknown> | null;
+  // Aggregate descendant state. The counters track whether conflicting activity
+  // currently exists below this node, while the tails preserve FIFO ordering for
+  // those descendant acquisitions.
+  public descendantWriteTail: Promise<unknown> | null;
+  public descendantReadTail: Promise<unknown> | null;
+  public activeDescendantReadCount: number;
+  public activeDescendantWriteCount: number;
+  protected errorHandler: typeof console.error;
+
   constructor(options: GraphNodeOptions) {
     this.segment = options.segment;
-    this.parent = options.parent;
-    this.children = new Map();
+    this.ascendant = options.ascendant;
+    this.descendants = new Map();
     this.writeTail = null;
     this.readTail = null;
-    this.childReadTail = null;
-    this.childWriteTail = null;
+    this.descendantReadTail = null;
+    this.descendantWriteTail = null;
+    this.activeDescendantReadCount = 0;
+    this.activeDescendantWriteCount = 0;
+    this.errorHandler = options.errorHandler;
   }
 
   appendWriteTail(lock: Promise<unknown>) {
@@ -38,12 +47,30 @@ export class GraphNode {
     this.readTail = this.readTail === null ? lock : this.readTail.then(() => lock);
   }
 
-  appendChildWriteTail(lock: Promise<unknown>) {
-    this.childWriteTail = this.childWriteTail === null ? lock : this.childWriteTail.then(() => lock);
+  appendDescendantWriteTail(lock: Promise<unknown>) {
+    this.activeDescendantWriteCount++;
+    const tail = (this.descendantWriteTail = this.descendantWriteTail === null ? lock : this.descendantWriteTail.then(() => lock));
+    tail
+      .finally(() => {
+        this.activeDescendantWriteCount--;
+        if (this.descendantWriteTail === tail) {
+          this.descendantWriteTail = null;
+        }
+      })
+      .catch(this.errorHandler);
   }
 
-  appendChildReadTail(lock: Promise<unknown>) {
-    this.childReadTail = this.childReadTail === null ? lock : this.childReadTail.then(() => lock);
+  appendDescendantReadTail(lock: Promise<unknown>) {
+    this.activeDescendantReadCount++;
+    const tail = (this.descendantReadTail = this.descendantReadTail === null ? lock : this.descendantReadTail.then(() => lock));
+    tail
+      .finally(() => {
+        if (this.descendantReadTail === tail) {
+          this.descendantReadTail = null;
+        }
+        this.activeDescendantReadCount--;
+      })
+      .catch(this.errorHandler);
   }
 }
 
@@ -61,7 +88,7 @@ export class LockManager {
     this.errorHandler = errorHandler ?? console.error;
     this.id = 0;
     this.idToRelease = new Map();
-    this.root = new GraphNode({ segment: "", parent: null });
+    this.root = new GraphNode({ segment: "", ascendant: null, errorHandler: this.errorHandler });
   }
 
   public acquireAll = async (paths: string[]): Promise<number> => {
@@ -82,11 +109,11 @@ export class LockManager {
       }
       for (const node of nodes) {
         // A subsequent write may not write until all prior reads and writes have completed.
-        const currentWriteTail = (node.writeTail = node.writeTail === null ? currentWrite : node.writeTail.then(() => currentWrite));
+        const tail = (node.writeTail = node.writeTail === null ? currentWrite : node.writeTail.then(() => currentWrite));
         // Prune the graph if a new write has not been acquired for this GraphNode.
-        currentWriteTail
+        tail
           .finally(() => {
-            if (node.writeTail === currentWriteTail) {
+            if (node.writeTail === tail) {
               node.writeTail = null;
               this.prune(node);
             }
@@ -118,11 +145,11 @@ export class LockManager {
       switch (type) {
         case "read": {
           // A subsequent write may not write until all prior reads have completed.
-          const currentReadTail = (node.readTail = node.readTail === null ? lock : node.readTail.then(() => lock));
+          const tail = (node.readTail = node.readTail === null ? lock : node.readTail.then(() => lock));
           // Prune the graph if a new read has not been acquired for this GraphNode.
-          currentReadTail
+          tail
             .finally(() => {
-              if (node.readTail === currentReadTail) {
+              if (node.readTail === tail) {
                 node.readTail = null;
                 this.prune(node);
               }
@@ -133,11 +160,11 @@ export class LockManager {
         }
         case "write": {
           // A subsequent write may not write until all prior reads and writes have completed.
-          const currentWriteTail = (node.writeTail = node.writeTail === null ? lock : node.writeTail.then(() => lock));
+          const tail = (node.writeTail = node.writeTail === null ? lock : node.writeTail.then(() => lock));
           // Prune the graph if a new write has not been acquired for this GraphNode.
-          currentWriteTail
+          tail
             .finally(() => {
-              if (node.writeTail === currentWriteTail) {
+              if (node.writeTail === tail) {
                 node.writeTail = null;
                 this.prune(node);
               }
@@ -170,14 +197,14 @@ export class LockManager {
 
   protected prune = (node: GraphNode | null): void => {
     while (node !== null) {
-      // Only the node's own tails and structural children participate in
-      // pruning. `childReadTail` / `childWriteTail` are aggregate descendant
-      // blockers and may linger as resolved cached promises.
-      if (node.children.size === 0 && node.readTail === null && node.writeTail === null) {
-        if (node.parent !== null) {
-          node.parent.children.delete(node.segment);
+      // Pruning depends only on structural children and the node's own lock
+      // tails. Aggregate descendant tails self-clear, and the counters track
+      // whether descendant activity still exists.
+      if (node.descendants.size === 0 && node.readTail === null && node.writeTail === null) {
+        if (node.ascendant !== null) {
+          node.ascendant.descendants.delete(node.segment);
         }
-        node = node.parent;
+        node = node.ascendant;
       } else {
         break;
       }
@@ -196,35 +223,38 @@ export class LockManager {
     const segments = path == root ? [path.split(pth.sep)[0]] : path.split(pth.sep);
     const name = segments[segments.length - 1];
     for (const segment of segments) {
-      let child = node.children.get(segment);
-      if (!child) {
-        child = new GraphNode({ segment, parent: node });
-        node.children.set(segment, child);
+      let descendant = node.descendants.get(segment);
+      if (!descendant) {
+        descendant = new GraphNode({ segment, ascendant: node, errorHandler: this.errorHandler });
+        node.descendants.set(segment, descendant);
       } else {
-        if (child.writeTail) {
-          locks.push(child.writeTail);
+        if (descendant.writeTail) {
+          locks.push(descendant.writeTail);
         }
-        if (child.readTail && type == "write") {
-          locks.push(child.readTail);
+        if (descendant.readTail && type == "write") {
+          locks.push(descendant.readTail);
         }
       }
       if (segment != name) {
+        // Cache descendant activity on each ancestor along the path so the
+        // target node can detect conflicting locks below it without a subtree
+        // traversal.
         if (type == "write") {
-          child.appendChildWriteTail(lock);
+          descendant.appendDescendantWriteTail(lock);
         }
         if (type == "read") {
-          child.appendChildReadTail(lock);
+          descendant.appendDescendantReadTail(lock);
         }
       }
-      node = child;
+      node = descendant;
     }
-    // Descendant blockers are cached on ancestors so conflicting descendant
-    // activity can be discovered without walking the entire subtree.
-    if (node.childReadTail && type == "write") {
-      locks.push(node.childReadTail);
+    // Use the counters to avoid awaiting a stale settled tail. The tail is only
+    // relevant while conflicting descendant activity is still active or queued.
+    if (node.activeDescendantReadCount != 0 && node.descendantReadTail && type == "write") {
+      locks.push(node.descendantReadTail);
     }
-    if (node.childWriteTail) {
-      locks.push(node.childWriteTail);
+    if (node.activeDescendantWriteCount != 0 && node.descendantWriteTail) {
+      locks.push(node.descendantWriteTail);
     }
     return { locks, node };
   };
