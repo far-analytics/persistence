@@ -320,7 +320,7 @@ Creates a hierarchical lock manager. The lock manager enforces per-operation loc
 
 **lockManager.acquire(path, type)**
 
-- path `<string>` An absolute path.
+- path `<string>` A path to acquire. Relative paths are normalized using `path.resolve`.
 - type `<"read" | "write">` The type of lock to acquire.
 
 Returns: `<Promise<number>>`
@@ -331,7 +331,7 @@ Filesystem root paths are supported for `type === "read"`. Filesystem root paths
 
 **lockManager.acquireAll(paths)**
 
-- paths `<Array<string>>` Absolute paths to acquire as one combined write lock set.
+- paths `<Array<string>>` Paths to acquire as one combined write lock set. Relative paths are normalized using `path.resolve`.
 
 Returns: `<Promise<number>>`
 
@@ -340,14 +340,13 @@ Acquires write-style locks for all listed paths under one shared lock id. This i
 Notes:
 
 - `paths` must not be empty.
-- All paths must be absolute.
 - Filesystem root paths are not supported.
 - Duplicate paths are treated as one combined lock target.
 - Acquisition is coordinated under one shared lock id, so callers should release it once with `lockManager.release(id)`.
 
 **lockManager.release(id)**
 
-- id `<number>` A lock id previously returned by `acquire`.
+- id `<number>` A lock id previously returned by `acquire` or `acquireAll`.
 
 Returns: `<void>`
 
@@ -386,12 +385,14 @@ Opens `path`, fsyncs it, and then closes it. This is mainly useful for durable-m
 #### GraphNode
 
 - segment `<string>` The path segment for this node.
-- parent `<GraphNode | null>` The parent node.
-- children `<Map<string, GraphNode>>` Child nodes keyed by segment.
+- ascendant `<GraphNode | null>` The ascendant node.
+- descendants `<Map<string, GraphNode>>` Descendant nodes keyed by segment.
 - writeTail `<Promise<unknown> | null>` Tail promise for write locks.
 - readTail `<Promise<unknown> | null>` Tail promise for read locks.
-- childWriteTail `<Promise<unknown> | null>` Cached aggregate tail for descendant writes.
-- childReadTail `<Promise<unknown> | null>` Cached aggregate tail for descendant reads.
+- descendantWriteTail `<Promise<unknown> | null>` Cached aggregate tail for descendant writes.
+- descendantReadTail `<Promise<unknown> | null>` Cached aggregate tail for descendant reads.
+- activeDescendantReadCount `<number>` Active read descendants.
+- activeDescendantWriteCount `<number>` Active write descendants.
 
 **graphNode.appendWriteTail(lock)**
 
@@ -405,13 +406,13 @@ Chains a write tail onto this node.
 
 Chains a read tail onto this node.
 
-**graphNode.appendChildWriteTail(lock)**
+**graphNode.appendDescendantWriteTail(lock)**
 
 - lock `<Promise<unknown>>`
 
 Chains a cached aggregate descendant-write tail onto this node.
 
-**graphNode.appendChildReadTail(lock)**
+**graphNode.appendDescendantReadTail(lock)**
 
 - lock `<Promise<unknown>>`
 
