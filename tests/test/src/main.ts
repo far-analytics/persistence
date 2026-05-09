@@ -294,6 +294,106 @@ await suite("LockManager", async () => {
     rootManager.release(wId);
   });
 
+  await test("Descendant aggregate state clears after release.", async () => {
+    const rootManager = new LockManager({ errorHandler: () => {} });
+    const root = pth.parse(WEB_ROOT).root;
+    const parentPath = pth.join(root, "tmp", "test-lock-descendant-cleanup", "a");
+    const childPath = pth.join(parentPath, "b");
+
+    const readId = await rootManager.acquire(childPath, "read");
+
+    const tmpNode = rootManager.root.descendants.get(root.split(pth.sep)[0]);
+    assert.ok(tmpNode);
+    const aNode = tmpNode.descendants.get("tmp")?.descendants.get("test-lock-descendant-cleanup")?.descendants.get("a");
+    assert.ok(aNode);
+    assert.strictEqual(aNode.activeDescendantReadCount, 1);
+    assert.ok(aNode.descendantReadTail);
+
+    rootManager.release(readId);
+    await tick();
+
+    assert.strictEqual(aNode.activeDescendantReadCount, 0);
+    assert.strictEqual(aNode.descendantReadTail, null);
+  });
+
+  await test("Overlapping descendant reads decrement aggregate state one at a time.", async () => {
+    const rootManager = new LockManager({ errorHandler: () => {} });
+    const root = pth.parse(WEB_ROOT).root;
+    const parentPath = pth.join(root, "tmp", "test-lock-descendant-overlap", "a");
+    const childPathB = pth.join(parentPath, "b");
+    const childPathC = pth.join(parentPath, "c");
+
+    const readIdB = await rootManager.acquire(childPathB, "read");
+    const readIdC = await rootManager.acquire(childPathC, "read");
+
+    const tmpNode = rootManager.root.descendants.get(root.split(pth.sep)[0]);
+    assert.ok(tmpNode);
+    const aNode = tmpNode.descendants.get("tmp")?.descendants.get("test-lock-descendant-overlap")?.descendants.get("a");
+    assert.ok(aNode);
+    assert.strictEqual(aNode.activeDescendantReadCount, 2);
+
+    let writeResolved = false;
+    const writePromise = rootManager.acquire(parentPath, "write");
+    void writePromise.then(() => {
+      writeResolved = true;
+    });
+
+    await tick();
+    assert.strictEqual(writeResolved, false);
+
+    rootManager.release(readIdB);
+    await tick();
+
+    assert.strictEqual(aNode.activeDescendantReadCount, 1);
+    assert.strictEqual(writeResolved, false);
+
+    rootManager.release(readIdC);
+    const writeId = await writePromise;
+
+    assert.strictEqual(aNode.activeDescendantReadCount, 0);
+    assert.strictEqual(aNode.descendantReadTail, null);
+    rootManager.release(writeId);
+  });
+
+  await test("Overlapping descendant writes decrement aggregate state one at a time.", async () => {
+    const rootManager = new LockManager({ errorHandler: () => {} });
+    const root = pth.parse(WEB_ROOT).root;
+    const parentPath = pth.join(root, "tmp", "test-lock-descendant-write-overlap", "a");
+    const childPathB = pth.join(parentPath, "b");
+    const childPathC = pth.join(parentPath, "c");
+
+    const writeIdB = await rootManager.acquire(childPathB, "write");
+    const writeIdC = await rootManager.acquire(childPathC, "write");
+
+    const tmpNode = rootManager.root.descendants.get(root.split(pth.sep)[0]);
+    assert.ok(tmpNode);
+    const aNode = tmpNode.descendants.get("tmp")?.descendants.get("test-lock-descendant-write-overlap")?.descendants.get("a");
+    assert.ok(aNode);
+    assert.strictEqual(aNode.activeDescendantWriteCount, 2);
+
+    let readResolved = false;
+    const readPromise = rootManager.acquire(parentPath, "read");
+    void readPromise.then(() => {
+      readResolved = true;
+    });
+
+    await tick();
+    assert.strictEqual(readResolved, false);
+
+    rootManager.release(writeIdB);
+    await tick();
+
+    assert.strictEqual(aNode.activeDescendantWriteCount, 1);
+    assert.strictEqual(readResolved, false);
+
+    rootManager.release(writeIdC);
+    const readId = await readPromise;
+
+    assert.strictEqual(aNode.activeDescendantWriteCount, 0);
+    assert.strictEqual(aNode.descendantWriteTail, null);
+    rootManager.release(readId);
+  });
+
   if (process.platform === "win32") {
     await test("Windows volumes do not conflict with each other.", async () => {
       const rootManager = new LockManager({ errorHandler: () => {} });
@@ -335,7 +435,22 @@ await suite("LockManager (acquireAll)", async () => {
 
     await assert.rejects(rootManager.acquireAll([validPath, root]), /Operation is not supported\./);
 
-    assert.strictEqual(rootManager.root.children.size, 0);
+    assert.strictEqual(rootManager.root.descendants.size, 0);
+  });
+
+  await test("acquireAll rejection does not leak aggregate descendant state.", async () => {
+    const rootManager = new LockManager({ errorHandler: () => {} });
+    const root = pth.parse(WEB_ROOT).root;
+    const parentPath = pth.join(root, "tmp", "test-lock-acquire-all-aggregate-cleanup", "a");
+    const childPath = pth.join(parentPath, "b");
+
+    await assert.rejects(rootManager.acquireAll([childPath, root]), /Operation is not supported\./);
+
+    assert.strictEqual(rootManager.root.descendants.size, 0);
+    assert.strictEqual(rootManager.root.activeDescendantReadCount, 0);
+    assert.strictEqual(rootManager.root.activeDescendantWriteCount, 0);
+    assert.strictEqual(rootManager.root.descendantReadTail, null);
+    assert.strictEqual(rootManager.root.descendantWriteTail, null);
   });
 
   await test("acquireAll on ancestor and descendant paths acquires without self-deadlock and blocks conflicting writes.", async () => {
