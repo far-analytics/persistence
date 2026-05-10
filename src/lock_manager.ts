@@ -17,13 +17,10 @@ export class GraphNode {
   public descendants: Map<string, GraphNode>;
   public writeTail: Promise<unknown> | null;
   public readTail: Promise<unknown> | null;
-  // Aggregate descendant state. The counters track whether conflicting activity
-  // currently exists below this node, while the tails preserve FIFO ordering for
-  // those descendant acquisitions.
+  // Aggregate descendant tails let a node wait on conflicting activity anywhere
+  // below it without traversing the whole active subtree.
   public descendantWriteTail: Promise<unknown> | null;
   public descendantReadTail: Promise<unknown> | null;
-  public activeDescendantReadCount: number;
-  public activeDescendantWriteCount: number;
   protected errorHandler: typeof console.error;
 
   constructor(options: GraphNodeOptions) {
@@ -34,45 +31,27 @@ export class GraphNode {
     this.readTail = null;
     this.descendantReadTail = null;
     this.descendantWriteTail = null;
-    this.activeDescendantReadCount = 0;
-    this.activeDescendantWriteCount = 0;
     this.errorHandler = options.errorHandler;
   }
 
-  appendWriteTail(lock: Promise<unknown>): Promise<unknown> {
+  public appendWriteTail(lock: Promise<unknown>): Promise<unknown> {
     this.writeTail = this.writeTail === null ? lock : this.writeTail.then(() => lock);
     return this.writeTail;
   }
 
-  appendReadTail(lock: Promise<unknown>): Promise<unknown> {
+  public appendReadTail(lock: Promise<unknown>): Promise<unknown> {
     this.readTail = this.readTail === null ? lock : this.readTail.then(() => lock);
     return this.readTail;
   }
 
-  appendDescendantWriteTail(lock: Promise<unknown>): void {
-    this.activeDescendantWriteCount++;
-    const tail = (this.descendantWriteTail = this.descendantWriteTail === null ? lock : this.descendantWriteTail.then(() => lock));
-    tail
-      .finally(() => {
-        this.activeDescendantWriteCount--;
-        if (this.descendantWriteTail === tail) {
-          this.descendantWriteTail = null;
-        }
-      })
-      .catch(this.errorHandler);
+  public appendDescendantWriteTail(lock: Promise<unknown>): Promise<unknown> {
+    this.descendantWriteTail = this.descendantWriteTail === null ? lock : this.descendantWriteTail.then(() => lock);
+    return this.descendantWriteTail;
   }
 
-  appendDescendantReadTail(lock: Promise<unknown>): void {
-    this.activeDescendantReadCount++;
-    const tail = (this.descendantReadTail = this.descendantReadTail === null ? lock : this.descendantReadTail.then(() => lock));
-    tail
-      .finally(() => {
-        if (this.descendantReadTail === tail) {
-          this.descendantReadTail = null;
-        }
-        this.activeDescendantReadCount--;
-      })
-      .catch(this.errorHandler);
+  public appendDescendantReadTail(lock: Promise<unknown>): Promise<unknown> {
+    this.descendantReadTail = this.descendantReadTail === null ? lock : this.descendantReadTail.then(() => lock);
+    return this.descendantReadTail;
   }
 }
 
@@ -199,9 +178,9 @@ export class LockManager {
 
   protected prune = (node: GraphNode | null): void => {
     while (node !== null) {
-      // Pruning depends only on structural children and the node's own lock
-      // tails. Aggregate descendant tails self-clear, and the counters track
-      // whether descendant activity still exists.
+      // Pruning only depends on structural descendants and the node's own lock
+      // tails. Aggregate descendant tails clear themselves when the last
+      // descendant acquisition in their chain drains.
       if (node.descendants.size === 0 && node.readTail === null && node.writeTail === null) {
         if (node.ancestor !== null) {
           node.ancestor.descendants.delete(node.segment);
@@ -239,23 +218,37 @@ export class LockManager {
       }
       if (segment != name) {
         // Cache descendant activity on each ancestor along the path so the
-        // target node can detect conflicting locks below it without a subtree
-        // traversal.
+        // target node can detect conflicting locks below it without walking the
+        // descendant subtree.
         if (type == "write") {
-          descendant.appendDescendantWriteTail(lock);
+          const tail = descendant.appendDescendantWriteTail(lock);
+          tail
+            .finally(() => {
+              if (descendant.descendantWriteTail === tail) {
+                descendant.descendantWriteTail = null;
+              }
+            })
+            .catch(this.errorHandler);
         }
         if (type == "read") {
-          descendant.appendDescendantReadTail(lock);
+          const tail = descendant.appendDescendantReadTail(lock);
+          tail
+            .finally(() => {
+              if (descendant.descendantReadTail === tail) {
+                descendant.descendantReadTail = null;
+              }
+            })
+            .catch(this.errorHandler);
         }
       }
       node = descendant;
     }
-    // Use the counters to avoid awaiting a stale settled tail. The tail is only
-    // relevant while conflicting descendant activity is still active or queued.
-    if (node.activeDescendantReadCount != 0 && node.descendantReadTail && type == "write") {
+    // A cached descendant tail is only present while conflicting descendant
+    // activity is still active or queued.
+    if (node.descendantReadTail && type == "write") {
       locks.push(node.descendantReadTail);
     }
-    if (node.activeDescendantWriteCount != 0 && node.descendantWriteTail) {
+    if (node.descendantWriteTail) {
       locks.push(node.descendantWriteTail);
     }
     return { locks, node };
