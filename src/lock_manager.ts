@@ -7,13 +7,13 @@ export interface Artifact {
 
 export interface GraphNodeOptions {
   segment: string;
-  ascendant: GraphNode | null;
+  ancestor: GraphNode | null;
   errorHandler: typeof console.error;
 }
 
 export class GraphNode {
   public segment: string;
-  public ascendant: GraphNode | null;
+  public ancestor: GraphNode | null;
   public descendants: Map<string, GraphNode>;
   public writeTail: Promise<unknown> | null;
   public readTail: Promise<unknown> | null;
@@ -28,7 +28,7 @@ export class GraphNode {
 
   constructor(options: GraphNodeOptions) {
     this.segment = options.segment;
-    this.ascendant = options.ascendant;
+    this.ancestor = options.ancestor;
     this.descendants = new Map();
     this.writeTail = null;
     this.readTail = null;
@@ -39,15 +39,17 @@ export class GraphNode {
     this.errorHandler = options.errorHandler;
   }
 
-  appendWriteTail(lock: Promise<unknown>) {
+  appendWriteTail(lock: Promise<unknown>): Promise<unknown> {
     this.writeTail = this.writeTail === null ? lock : this.writeTail.then(() => lock);
+    return this.writeTail;
   }
 
-  appendReadTail(lock: Promise<unknown>) {
+  appendReadTail(lock: Promise<unknown>): Promise<unknown> {
     this.readTail = this.readTail === null ? lock : this.readTail.then(() => lock);
+    return this.readTail;
   }
 
-  appendDescendantWriteTail(lock: Promise<unknown>) {
+  appendDescendantWriteTail(lock: Promise<unknown>): void {
     this.activeDescendantWriteCount++;
     const tail = (this.descendantWriteTail = this.descendantWriteTail === null ? lock : this.descendantWriteTail.then(() => lock));
     tail
@@ -60,7 +62,7 @@ export class GraphNode {
       .catch(this.errorHandler);
   }
 
-  appendDescendantReadTail(lock: Promise<unknown>) {
+  appendDescendantReadTail(lock: Promise<unknown>): void {
     this.activeDescendantReadCount++;
     const tail = (this.descendantReadTail = this.descendantReadTail === null ? lock : this.descendantReadTail.then(() => lock));
     tail
@@ -88,7 +90,7 @@ export class LockManager {
     this.errorHandler = errorHandler ?? console.error;
     this.id = 0;
     this.idToRelease = new Map();
-    this.root = new GraphNode({ segment: "", ascendant: null, errorHandler: this.errorHandler });
+    this.root = new GraphNode({ segment: "", ancestor: null, errorHandler: this.errorHandler });
   }
 
   public acquireAll = async (paths: string[]): Promise<number> => {
@@ -99,17 +101,17 @@ export class LockManager {
     const nodes: GraphNode[] = [];
     let locks: Promise<unknown>[] = [];
     try {
-      const currentWrite = new Promise<unknown>((r) => {
+      const lock = new Promise<unknown>((r) => {
         this.idToRelease.set(acquireId, r);
       });
       for (const path of paths) {
-        const artifact = this.createArtifact(path, currentWrite, "write");
+        const artifact = this.createArtifact(path, lock, "write");
         nodes.push(artifact.node);
         locks = locks.concat(artifact.locks);
       }
       for (const node of nodes) {
         // A subsequent write may not write until all prior reads and writes have completed.
-        const tail = (node.writeTail = node.writeTail === null ? currentWrite : node.writeTail.then(() => currentWrite));
+        const tail = node.appendWriteTail(lock);
         // Prune the graph if a new write has not been acquired for this GraphNode.
         tail
           .finally(() => {
@@ -145,7 +147,7 @@ export class LockManager {
       switch (type) {
         case "read": {
           // A subsequent write may not write until all prior reads have completed.
-          const tail = (node.readTail = node.readTail === null ? lock : node.readTail.then(() => lock));
+          const tail = node.appendReadTail(lock);
           // Prune the graph if a new read has not been acquired for this GraphNode.
           tail
             .finally(() => {
@@ -160,7 +162,7 @@ export class LockManager {
         }
         case "write": {
           // A subsequent write may not write until all prior reads and writes have completed.
-          const tail = (node.writeTail = node.writeTail === null ? lock : node.writeTail.then(() => lock));
+          const tail = node.appendWriteTail(lock);
           // Prune the graph if a new write has not been acquired for this GraphNode.
           tail
             .finally(() => {
@@ -201,10 +203,10 @@ export class LockManager {
       // tails. Aggregate descendant tails self-clear, and the counters track
       // whether descendant activity still exists.
       if (node.descendants.size === 0 && node.readTail === null && node.writeTail === null) {
-        if (node.ascendant !== null) {
-          node.ascendant.descendants.delete(node.segment);
+        if (node.ancestor !== null) {
+          node.ancestor.descendants.delete(node.segment);
         }
-        node = node.ascendant;
+        node = node.ancestor;
       } else {
         break;
       }
@@ -225,7 +227,7 @@ export class LockManager {
     for (const segment of segments) {
       let descendant = node.descendants.get(segment);
       if (!descendant) {
-        descendant = new GraphNode({ segment, ascendant: node, errorHandler: this.errorHandler });
+        descendant = new GraphNode({ segment, ancestor: node, errorHandler: this.errorHandler });
         node.descendants.set(segment, descendant);
       } else {
         if (descendant.writeTail) {
