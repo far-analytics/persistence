@@ -385,7 +385,7 @@ Opens `path`, fsyncs it, and then closes it. This is mainly useful for durable-m
 #### GraphNode
 
 - segment `<string>` The path segment for this node.
-- ascendant `<GraphNode | null>` The ascendant node.
+- ancestor `<GraphNode | null>` The ancestor node.
 - descendants `<Map<string, GraphNode>>` Descendant nodes keyed by segment.
 - writeTail `<Promise<unknown> | null>` Tail promise for write locks.
 - readTail `<Promise<unknown> | null>` Tail promise for read locks.
