@@ -385,14 +385,12 @@ Opens `path`, fsyncs it, and then closes it. This is mainly useful for durable-m
 #### GraphNode
 
 - segment `<string>` The path segment for this node.
-- ancestor `<GraphNode | null>` The ancestor node.
-- descendants `<Map<string, GraphNode>>` Descendant nodes keyed by segment.
+- ancestor `<GraphNode | null>` The immediate ancestor node.
+- descendants `<Map<string, GraphNode>>` Immediate descendant nodes keyed by segment.
 - writeTail `<Promise<unknown> | null>` Tail promise for write locks.
 - readTail `<Promise<unknown> | null>` Tail promise for read locks.
 - descendantWriteTail `<Promise<unknown> | null>` Cached aggregate tail for descendant writes.
 - descendantReadTail `<Promise<unknown> | null>` Cached aggregate tail for descendant reads.
-- activeDescendantReadCount `<number>` Active read descendants.
-- activeDescendantWriteCount `<number>` Active write descendants.
 
 **graphNode.appendWriteTail(lock)**
 
