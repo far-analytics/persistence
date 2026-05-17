@@ -4,15 +4,15 @@ Persistence - a filesystem coordination layer.
 
 ## Introduction
 
-Persistence is a filesystem coordination layer. It provides hierarchical read/write locking, optional durability (see durability notes below), and atomic‑style writes. You can use Persistence to safely coordinate operations through a single shared `LockManager` over hierarchical paths. Reads on the same file are concurrent; however, reads are partitioned by writes and conflicting writes are processed in order of arrival (FIFO).
+Persistence is an in-process filesystem coordination layer for code that routes operations through one shared `LockManager`. It provides hierarchical read/write locking, optional durability (see durability notes below), and atomic-style writes. Reads on the same file are concurrent; however, reads are partitioned by writes and conflicting writes are processed in order of arrival (FIFO). Persistence does not provide OS-level locks or cross-process coordination by itself.
 
 ### Features
 
 - **A _zero-dependency_ filesystem coordination layer.**
-- Coordinates reads and writes with hierarchical path locks.
+- Coordinates reads and writes that use the same `LockManager` with hierarchical path locks.
 - Provides atomic-style file replacement (temp file + rename).
-- Flushes directory metadata for stronger durability on write/delete when durability is enabled.
-- FIFO: for any two conflicting operations where at least one is a write, acquisition respects arrival order.
+- Optionally attempts to flush file and directory metadata for stronger durability on write/delete.
+- Within one `LockManager`, FIFO: for any two conflicting operations where at least one is a write, acquisition respects arrival order.
 
 ### Table of contents
 
@@ -113,18 +113,18 @@ Please see the Node.js [example](https://github.com/far-analytics/persistence/tr
 
 ## Locking model
 
-- Per-operation hierarchical locking within a single `LockManager` instance.
+- Cooperative per-operation hierarchical locking within a single `LockManager` instance; this is not OS-level locking.
 - Write partitioned FIFO: for any two conflicting operations where at least one is a write, acquisition respects arrival order.
 - Read operations can overlap other reads on the same path or within the same ancestor/descendant subtree.
 - Write operations are exclusive: a write on a path excludes all reads and writes on that path and any ancestor/descendant paths until the write is complete.
 
 ## Horizontal scaling
 
-You can scale clients horizontally if all operations route through one authoritative `LockManager` (for example, a shared in-process instance or a single lock service accessed over RPC).
+Persistence does not implement distributed locking. To use it in a horizontally scaled system, all operations that need coordination must route through one authoritative process or service that owns the shared `LockManager`. Independent processes with independent `LockManager` instances are not coordinated.
 
 ## Durability
 
-When a client instance is instantiated with `{ durable: true }`, `client.write` and `client.createWriteStream` flush temp file data before rename and then fsync the parent directory. Likewise, `client.rename` fsyncs the relevant parent directories, and `client.delete` operations fsync the parent directory. Durability guarantees are best‑effort and depend on filesystem and OS behavior. Durability operations have been tested on Linux on ext4; however, fsync may throw `EPERM` on Windows on NTFS.
+When a client instance is instantiated with `{ durable: true }`, `client.write` and `client.createWriteStream` flush temp file data before rename and then fsync the parent directory. Likewise, `client.rename` fsyncs the relevant parent directories, and `client.delete` operations fsync the parent directory. Durability behavior is best-effort and depends on filesystem and OS behavior. Durability operations have been tested on Linux on ext4; however, fsync may throw `EPERM` on Windows on NTFS.
 
 Important semantic note:
 
@@ -138,7 +138,8 @@ Persistence supports atomic-style file replacement via temp file + rename for `w
 
 - The directory structure that Persistence operates on is assumed to be hierarchical.
 - Hence, symlinks/aliases are not supported.
-- Filesystem root-path operations (i.e., operations on `/` or `C:\`) are restricted: `client.collect(root)` is supported, but `client.read(root)`, `client.createReadStream(root)`, `client.write(root)`, `client.createWriteStream(root)`, `client.rename(root, path)`, `client.rename(path, root)`, and `client.delete(root)` are not.
+- Filesystem root-path operations (i.e., operations on `/`, `C:\`, or a UNC share root such as `\\server\share\`) are restricted: `client.collect(root)` is supported, but `client.read(root)`, `client.createReadStream(root)`, `client.write(root)`, `client.createWriteStream(root)`, `client.rename(root, path)`, `client.rename(path, root)`, and `client.delete(root)` are not.
+- Locking is cooperative and in-process; it only coordinates operations that use the same `LockManager`.
 - Distributed locking or coordination across multiple independent `LockManager` instances is not supported.
 - No protection against external processes that bypass the client and write directly to disk.
 - When durability is enabled, fsync on directories is considered best‑effort and behaves differently on different filesystems.
@@ -156,7 +157,7 @@ For advanced use cases, the package also exports low-level durability helpers an
 
 - options `<ClientOptions>` Options passed to the `Client`.
   - manager `<LockManager>` The lock manager instance used to coordinate access.
-  - durable `<boolean>` If `true`, use stronger durability behavior for filesystem mutations: `client.write` and `client.createWriteStream` flush the temp file before rename and then fsync the parent directory. Likewise, `client.rename` fsyncs the relevant parent directories, and `client.delete` operations fsync the parent directory. **Default: `false`**
+  - durable `<boolean>` If `true`, attempt stronger durability behavior for filesystem mutations: `client.write` and `client.createWriteStream` flush the temp file before rename and then fsync the parent directory. Likewise, `client.rename` fsyncs the relevant parent directories, and `client.delete` operations fsync the parent directory. **Default: `false`**
 
 Use a `Client` instance to read, write, list, rename, and delete files with hierarchical locking.
 
@@ -263,7 +264,7 @@ In durable mode, a rejection does not always mean the old file is still in place
 
 Returns: `<Promise<WriteStream>>`
 
-Creates an atomic write stream abstraction backed by a temp file + rename and holds a write lock for the stream lifetime. Persistence supports the subset of write-stream options listed above.
+Creates an atomic-style write stream abstraction backed by a temp file + rename and holds a write lock for the stream lifetime. Persistence supports the subset of write-stream options listed above.
 
 Notes:
 
@@ -421,6 +422,7 @@ Chains a cached aggregate descendant-read tail onto this node.
 #### Artifact
 
 - locks `<Array<Promise<unknown>>>` Promises the lock acquisition must await.
+- ancestors `<Array<GraphNode>>` Ancestor nodes used to cache aggregate descendant activity.
 - node `<GraphNode>` The graph node for the path.
 
 ## Versioning
