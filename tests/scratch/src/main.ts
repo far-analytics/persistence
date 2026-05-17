@@ -10,3 +10,9 @@ writeStream.end();
 await once(writeStream, "finish");
 const collection = await client.collect("/home/null/workspace/repos/far-analytics/persistence/tests/scratch/");
 console.log(collection);
+(async () => {
+  const id = await manager.acquireAll(["/tmp/a/b", "/tmp/a"]);
+  console.log("A");
+  manager.release(id);
+  console.log("B");
+})().catch(console.error);

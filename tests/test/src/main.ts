@@ -245,6 +245,36 @@ await suite("LockManager", async () => {
     manager.release(rId);
   });
 
+  await test("Ancestor/descendant conflicts are enforced when path segments repeat.", async () => {
+    const repeatManager = new LockManager({ errorHandler: () => {} });
+    const childPath = "/tmp/test-lock-repeat/a/x/a";
+    const parentPath = "/tmp/test-lock-repeat/a";
+
+    const w1 = await repeatManager.acquire(childPath, "write");
+    let readResolved = false;
+    const rPromise = repeatManager.acquire(parentPath, "read");
+    void rPromise.then(() => {
+      readResolved = true;
+    });
+    await tick();
+    assert.strictEqual(readResolved, false);
+    repeatManager.release(w1);
+    const rId = await rPromise;
+    repeatManager.release(rId);
+
+    const r1 = await repeatManager.acquire(childPath, "read");
+    let writeResolved = false;
+    const wPromise = repeatManager.acquire(parentPath, "write");
+    void wPromise.then(() => {
+      writeResolved = true;
+    });
+    await tick();
+    assert.strictEqual(writeResolved, false);
+    repeatManager.release(r1);
+    const wId = await wPromise;
+    repeatManager.release(wId);
+  });
+
   await test("Independent paths do not block each other.", async () => {
     const p1 = "/tmp/test-lock-independent/a";
     const p2 = "/tmp/test-lock-independent/b";
@@ -312,6 +342,54 @@ await suite("LockManager", async () => {
       const dWrite = await dWritePromise;
       rootManager.release(dWrite);
     });
+
+    await test("Windows UNC shares do not conflict with each other.", async () => {
+      const rootManager = new LockManager({ errorHandler: () => {} });
+      const shareAPath = "\\\\server-a\\share-a\\tmp\\test-lock-unc";
+      const shareBPath = "\\\\server-b\\share-b\\tmp\\test-lock-unc";
+      const shareAWrite = await rootManager.acquire(shareAPath, "write");
+
+      let shareBWriteResolved = false;
+      const shareBWritePromise = rootManager.acquire(shareBPath, "write");
+      void shareBWritePromise.then(() => {
+        shareBWriteResolved = true;
+      });
+      await tick();
+      assert.strictEqual(shareBWriteResolved, true);
+      rootManager.release(shareAWrite);
+      const shareBWrite = await shareBWritePromise;
+      rootManager.release(shareBWrite);
+    });
+
+    await test("Windows UNC root reads only block descendants on the same share.", async () => {
+      const rootManager = new LockManager({ errorHandler: () => {} });
+      const shareARoot = "\\\\server-a\\share-a\\";
+      const shareAChild = "\\\\server-a\\share-a\\tmp\\test-lock-unc-root";
+      const shareBChild = "\\\\server-b\\share-b\\tmp\\test-lock-unc-root";
+      const shareARead = await rootManager.acquire(shareARoot, "read");
+
+      let shareAWriteResolved = false;
+      const shareAWritePromise = rootManager.acquire(shareAChild, "write");
+      void shareAWritePromise.then(() => {
+        shareAWriteResolved = true;
+      });
+
+      let shareBWriteResolved = false;
+      const shareBWritePromise = rootManager.acquire(shareBChild, "write");
+      void shareBWritePromise.then(() => {
+        shareBWriteResolved = true;
+      });
+
+      await tick();
+      assert.strictEqual(shareAWriteResolved, false);
+      assert.strictEqual(shareBWriteResolved, true);
+
+      rootManager.release(shareARead);
+      const shareAWrite = await shareAWritePromise;
+      rootManager.release(shareAWrite);
+      const shareBWrite = await shareBWritePromise;
+      rootManager.release(shareBWrite);
+    });
   }
   await test("Write on root is rejected.", async () => {
     const rootManager = new LockManager({ errorHandler: () => {} });
@@ -366,6 +444,104 @@ await suite("LockManager (acquireAll)", async () => {
     rootManager.release(acquireAllId);
     const writeId = await writePromise;
     rootManager.release(writeId);
+  });
+
+  await test("acquireAll is order-independent for nested path sets.", async () => {
+    const root = pth.parse(WEB_ROOT).root;
+    const basePath = pth.join(root, "tmp", "test-lock-acquire-all-order");
+    const parentPath = pth.join(basePath, "a");
+    const childPath = pth.join(parentPath, "b");
+    const grandchildPath = pth.join(childPath, "c");
+    const siblingPath = pth.join(parentPath, "d");
+    const repeatedParentPath = pth.join(basePath, "repeat");
+    const repeatedChildPath = pth.join(repeatedParentPath, "x", "repeat");
+    const scenarios = [
+      { name: "child before parent", paths: [childPath, parentPath] },
+      { name: "grandchild before child before parent", paths: [grandchildPath, childPath, parentPath] },
+      { name: "sibling descendants before parent", paths: [childPath, siblingPath, parentPath] },
+      { name: "duplicate child before parent", paths: [childPath, childPath, parentPath] },
+      { name: "repeated segment child before parent", paths: [repeatedChildPath, repeatedParentPath] },
+    ];
+
+    for (const scenario of scenarios) {
+      const rootManager = new LockManager({ errorHandler: () => {} });
+      let acquireAllResolved = false;
+      const acquireAllPromise = rootManager.acquireAll(scenario.paths);
+      void acquireAllPromise.then(() => {
+        acquireAllResolved = true;
+      });
+
+      await tick();
+      assert.strictEqual(acquireAllResolved, true, scenario.name);
+
+      const acquireAllId = await acquireAllPromise;
+      rootManager.release(acquireAllId);
+    }
+  });
+
+  await test("acquireAll descendant-before-ancestor blocks conflicts across the combined lock.", async () => {
+    const rootManager = new LockManager({ errorHandler: () => {} });
+    const root = pth.parse(WEB_ROOT).root;
+    const parentPath = pth.join(root, "tmp", "test-lock-acquire-all-desc-first-block", "a");
+    const childPath = pth.join(parentPath, "b");
+    const unrelatedPath = pth.join(root, "tmp", "test-lock-acquire-all-desc-first-block", "unrelated");
+
+    const acquireAllId = await rootManager.acquireAll([childPath, parentPath]);
+
+    let parentWriteResolved = false;
+    const parentWritePromise = rootManager.acquire(parentPath, "write");
+    void parentWritePromise.then(() => {
+      parentWriteResolved = true;
+    });
+
+    let childReadResolved = false;
+    const childReadPromise = rootManager.acquire(childPath, "read");
+    void childReadPromise.then(() => {
+      childReadResolved = true;
+    });
+
+    let unrelatedWriteResolved = false;
+    const unrelatedWritePromise = rootManager.acquire(unrelatedPath, "write");
+    void unrelatedWritePromise.then(() => {
+      unrelatedWriteResolved = true;
+    });
+
+    await tick();
+    assert.strictEqual(parentWriteResolved, false);
+    assert.strictEqual(childReadResolved, false);
+    assert.strictEqual(unrelatedWriteResolved, true);
+
+    rootManager.release(acquireAllId);
+    const parentWriteId = await parentWritePromise;
+    rootManager.release(parentWriteId);
+    const childReadId = await childReadPromise;
+    rootManager.release(childReadId);
+    const unrelatedWriteId = await unrelatedWritePromise;
+    rootManager.release(unrelatedWriteId);
+  });
+
+  await test("acquireAll descendant-before-ancestor waits for earlier conflicting locks.", async () => {
+    const rootManager = new LockManager({ errorHandler: () => {} });
+    const root = pth.parse(WEB_ROOT).root;
+    const parentPath = pth.join(root, "tmp", "test-lock-acquire-all-desc-first-fifo", "a");
+    const childPath = pth.join(parentPath, "b");
+
+    const readId = await rootManager.acquire(parentPath, "read");
+    let acquireAllResolved = false;
+    const acquireAllPromise = rootManager.acquireAll([childPath, parentPath]);
+    void acquireAllPromise.then(() => {
+      acquireAllResolved = true;
+    });
+
+    await tick();
+    assert.strictEqual(acquireAllResolved, false);
+
+    rootManager.release(readId);
+    await tick();
+    assert.strictEqual(acquireAllResolved, true);
+
+    const acquireAllId = await acquireAllPromise;
+    rootManager.release(acquireAllId);
   });
 
   await test("acquireAll on independent paths blocks conflicts on either path but not unrelated writes.", async () => {
