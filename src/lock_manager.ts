@@ -2,6 +2,7 @@ import * as pth from "node:path";
 
 export interface Artifact {
   locks: Promise<unknown>[];
+  ancestors: GraphNode[];
   node: GraphNode;
 }
 
@@ -79,15 +80,31 @@ export class LockManager {
     const acquireId = this.id++;
     const nodes: GraphNode[] = [];
     let locks: Promise<unknown>[] = [];
+    let ancestors: GraphNode[] = [];
     try {
       const lock = new Promise<unknown>((r) => {
         this.idToRelease.set(acquireId, r);
       });
+
       for (const path of paths) {
         const artifact = this.createArtifact(path, lock, "write");
         nodes.push(artifact.node);
         locks = locks.concat(artifact.locks);
+        ancestors = ancestors.concat(artifact.ancestors);
       }
+
+      ancestors = [...new Set(ancestors)];
+      for (const ancestor of ancestors) {
+        const tail = ancestor.appendDescendantWriteTail(lock);
+        tail
+          .finally(() => {
+            if (ancestor.descendantWriteTail === tail) {
+              ancestor.descendantWriteTail = null;
+            }
+          })
+          .catch(this.errorHandler);
+      }
+
       for (const node of nodes) {
         // A subsequent write may not write until all prior reads and writes have completed.
         const tail = node.appendWriteTail(lock);
@@ -122,9 +139,22 @@ export class LockManager {
       const lock = new Promise<unknown>((r) => {
         this.idToRelease.set(acquireId, r);
       });
-      const { node, locks } = this.createArtifact(path, lock, type);
       switch (type) {
         case "read": {
+          const { node, locks, ancestors } = this.createArtifact(path, lock, type);
+          for (const ancestor of ancestors) {
+            // Cache descendant activity on each ancestor along the path so the
+            // target node can detect conflicting locks below it without walking the
+            // descendant subtree.
+            const tail = ancestor.appendDescendantReadTail(lock);
+            tail
+              .finally(() => {
+                if (ancestor.descendantReadTail === tail) {
+                  ancestor.descendantReadTail = null;
+                }
+              })
+              .catch(this.errorHandler);
+          }
           // A subsequent write may not write until all prior reads have completed.
           const tail = node.appendReadTail(lock);
           // Prune the graph if a new read has not been acquired for this GraphNode.
@@ -140,6 +170,17 @@ export class LockManager {
           return acquireId;
         }
         case "write": {
+          const { node, locks, ancestors } = this.createArtifact(path, lock, type);
+          for (const ancestor of ancestors) {
+            const tail = ancestor.appendDescendantWriteTail(lock);
+            tail
+              .finally(() => {
+                if (ancestor.descendantWriteTail === tail) {
+                  ancestor.descendantWriteTail = null;
+                }
+              })
+              .catch(this.errorHandler);
+          }
           // A subsequent write may not write until all prior reads and writes have completed.
           const tail = node.appendWriteTail(lock);
           // Prune the graph if a new write has not been acquired for this GraphNode.
@@ -194,6 +235,7 @@ export class LockManager {
 
   protected createArtifact = (path: string, lock: Promise<unknown>, type: "read" | "write"): Artifact => {
     const locks: Promise<unknown>[] = [];
+    const ancestors: GraphNode[] = [];
     path = pth.resolve(path);
     const root = pth.parse(path).root;
     // This is a defensive check.
@@ -201,9 +243,9 @@ export class LockManager {
       throw new Error("Operation is not supported.");
     }
     let node: GraphNode = this.root;
-    const segments = path == root ? [path.split(pth.sep)[0]] : path.split(pth.sep);
-    const name = segments[segments.length - 1];
-    for (const segment of segments) {
+    const segments = path == root ? [root] : [root, ...path.slice(root.length).split(pth.sep)];
+    const last = segments.length - 1;
+    for (const [index, segment] of segments.entries()) {
       let descendant = node.descendants.get(segment);
       if (!descendant) {
         descendant = new GraphNode({ segment, ancestor: node, errorHandler: this.errorHandler });
@@ -216,30 +258,8 @@ export class LockManager {
           locks.push(descendant.readTail);
         }
       }
-      if (segment != name) {
-        // Cache descendant activity on each ancestor along the path so the
-        // target node can detect conflicting locks below it without walking the
-        // descendant subtree.
-        if (type == "write") {
-          const tail = descendant.appendDescendantWriteTail(lock);
-          tail
-            .finally(() => {
-              if (descendant.descendantWriteTail === tail) {
-                descendant.descendantWriteTail = null;
-              }
-            })
-            .catch(this.errorHandler);
-        }
-        if (type == "read") {
-          const tail = descendant.appendDescendantReadTail(lock);
-          tail
-            .finally(() => {
-              if (descendant.descendantReadTail === tail) {
-                descendant.descendantReadTail = null;
-              }
-            })
-            .catch(this.errorHandler);
-        }
+      if (index != last) {
+        ancestors.push(descendant);
       }
       node = descendant;
     }
@@ -251,6 +271,6 @@ export class LockManager {
     if (node.descendantWriteTail) {
       locks.push(node.descendantWriteTail);
     }
-    return { locks, node };
+    return { locks, node, ancestors };
   };
 }
