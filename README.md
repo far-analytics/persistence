@@ -120,7 +120,7 @@ Please see the Node.js [example](https://github.com/far-analytics/persistence/tr
 
 ## Horizontal scaling
 
-Persistence does not implement distributed locking. To use it in a horizontally scaled system, all operations that need coordination must route through one authoritative process or service that owns the shared `LockManager` (for example, a shared in-process instance or a single lock service accessed over RPC). Independent processes with independent `LockManager` instances are not coordinated.
+Persistence does not implement distributed locking. To use it in a horizontally scaled system, all operations that need coordination must route through one authoritative process or service that owns the shared `LockManager` (for example, a single lock service accessed over RPC). Independent processes with independent `LockManager` instances are not coordinated.
 
 ## Durability
 
