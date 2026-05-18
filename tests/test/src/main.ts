@@ -915,7 +915,7 @@ await suite("LockManager (state-machine)", async () => {
       for (let i = 0; i < seedCount; i++) {
         await runGeneratedSequence(baseSeed + i, steps, "test-lock-soak");
       }
-    },
+    }
   );
 });
 
