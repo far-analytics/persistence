@@ -457,6 +457,28 @@ npm install
 npm test
 ```
 
+#### Run the optional lock-manager soak test.
+
+The normal test suite includes a generated state-machine test. A longer lock-manager soak test is available but skipped by default.
+
+On POSIX shells:
+
+```bash
+PERSISTENCE_SOAK=1 npm test
+```
+
+On PowerShell:
+
+```powershell
+$env:PERSISTENCE_SOAK = "1"; npm test
+```
+
+Optional controls:
+
+- `PERSISTENCE_SOAK_SEEDS` Number of generated seeds to run. Default: `16`.
+- `PERSISTENCE_SOAK_STEPS` Number of generated acquire/release steps per seed. Default: `2000`.
+- `PERSISTENCE_SOAK_TIMEOUT_MS` Test timeout in milliseconds. Default: `120000`.
+
 ## Support
 
 For feature requests or issues, please open an [issue](https://github.com/far-analytics/persistence/issues) or contact the author.
