@@ -44,17 +44,26 @@ export class WriteStream extends stream.Writable {
   }
 
   _write(chunk: string | Buffer, encoding: BufferEncoding, callback: (error?: Error | null) => void): void {
-    try {
-      if (!this.fsWriteStream.write(chunk, encoding)) {
-        this.fsWriteStream.once("drain", () => {
-          callback();
-        });
-        return;
+    void (async () => {
+      try {
+        if (!this.fsWriteStream.write(chunk, encoding)) {
+          const ac = new AbortController();
+          try {
+            await Promise.race([
+              once(this.fsWriteStream, "drain", { signal: ac.signal }),
+              once(this.fsWriteStream, "close", { signal: ac.signal }).then(() => {
+                throw new Error("fsWriteStream closed.");
+              }),
+            ]);
+          } finally {
+            ac.abort();
+          }
+        }
+        callback();
+      } catch (err) {
+        callback(err instanceof Error ? err : new Error(String(err)));
       }
-      callback();
-    } catch (err) {
-      callback(err instanceof Error ? err : new Error(String(err)));
-    }
+    })();
   }
 
   _writev(chunks: { chunk: string | Buffer; encoding: BufferEncoding }[], callback: (error?: Error | null) => void): void {
@@ -67,7 +76,17 @@ export class WriteStream extends stream.Writable {
           }
         }
         if (drain) {
-          await once(this.fsWriteStream, "drain");
+          const ac = new AbortController();
+          try {
+            await Promise.race([
+              once(this.fsWriteStream, "drain", { signal: ac.signal }),
+              once(this.fsWriteStream, "close", { signal: ac.signal }).then(() => {
+                throw new Error("fsWriteStream closed.");
+              }),
+            ]);
+          } finally {
+            ac.abort();
+          }
         }
         callback();
       } catch (err) {
@@ -87,7 +106,7 @@ export class WriteStream extends stream.Writable {
         }
         callback();
       } catch (err) {
-        await fsp.rm(this.tempPath, { force: true });
+        await fsp.rm(this.tempPath, { force: true }).catch(() => {});
         callback(err instanceof Error ? err : new Error(String(err)));
       } finally {
         this.manager.release(this.id);
@@ -103,7 +122,7 @@ export class WriteStream extends stream.Writable {
         await fsp.rm(this.tempPath, { force: true });
         callback(error);
       } catch (err) {
-        callback(err instanceof Error ? err : new Error(String(err)));
+        callback(error ?? (err instanceof Error ? err : new Error(String(err))));
       } finally {
         this.manager.release(this.id);
       }
