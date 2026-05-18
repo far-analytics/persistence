@@ -96,6 +96,20 @@ const withFailingSyncOnOpen = async <T>(path: string, error: Error, fn: () => Pr
   }
 };
 
+const withTimeout = async <T>(promise: Promise<T>, message: string): Promise<T> => {
+  let timeout!: NodeJS.Timeout;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => {
+      reject(new Error(message));
+    }, 2_000);
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
 server.on("request", (req: http.IncomingMessage, res: http.ServerResponse & { req: http.IncomingMessage }) => {
   void (async () => {
     try {
@@ -1710,6 +1724,134 @@ await suite("Client (streams)", async () => {
     assert.strictEqual(nextData, JSON.stringify({ v: 2 }));
   });
 
+  await test("createWriteStream abort signal settles a backpressured write callback.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const dir = pth.join(WEB_ROOT, "streams", "backpressure-abort");
+    const file = pth.join(dir, "data.txt");
+    await fsp.mkdir(dir, { recursive: true });
+    await streamClient.write(file, "original", "utf8");
+
+    const controller = new AbortController();
+    const ws = await streamClient.createWriteStream(file, { highWaterMark: 1, signal: controller.signal });
+    const finishedPromise = withTimeout(finished(ws), "Timed out waiting for aborted write stream.");
+    const writeCallback = new Promise<Error | null | undefined>((resolve) => {
+      ws.write(Buffer.alloc(8 * 1024 * 1024), resolve);
+    });
+
+    controller.abort();
+
+    await assert.rejects(finishedPromise, { name: "AbortError" });
+    const writeError = await withTimeout(writeCallback, "Timed out waiting for aborted write callback.");
+    assert.ok(writeError instanceof Error);
+    assert.strictEqual(writeError.name, "AbortError");
+
+    const readData = await streamClient.read(file, "utf8");
+    assert.strictEqual(readData, "original");
+    await streamClient.write(file, "next", "utf8");
+    const nextData = await streamClient.read(file, "utf8");
+    assert.strictEqual(nextData, "next");
+  });
+
+  await test("createWriteStream settles a backpressured write callback when the inner stream closes.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const dir = pth.join(WEB_ROOT, "streams", "backpressure-close");
+    const file = pth.join(dir, "data.txt");
+    await fsp.mkdir(dir, { recursive: true });
+    await streamClient.write(file, "original", "utf8");
+
+    const ws = await streamClient.createWriteStream(file, { highWaterMark: 1 });
+    const finishedPromise = withTimeout(finished(ws), "Timed out waiting for closed write stream.");
+    const writeCallback = new Promise<Error | null | undefined>((resolve) => {
+      ws.write(Buffer.alloc(8 * 1024 * 1024), resolve);
+    });
+
+    ws.fsWriteStream.close();
+
+    await assert.rejects(finishedPromise, /fsWriteStream closed\./);
+    const writeError = await withTimeout(writeCallback, "Timed out waiting for closed write callback.");
+    assert.ok(writeError instanceof Error);
+    assert.match(writeError.message, /fsWriteStream closed\./);
+
+    const readData = await streamClient.read(file, "utf8");
+    assert.strictEqual(readData, "original");
+    await streamClient.write(file, "next", "utf8");
+    const nextData = await streamClient.read(file, "utf8");
+    assert.strictEqual(nextData, "next");
+  });
+
+  await test("createWriteStream abort signal settles corked backpressured write callbacks.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const dir = pth.join(WEB_ROOT, "streams", "backpressure-writev-abort");
+    const file = pth.join(dir, "data.txt");
+    await fsp.mkdir(dir, { recursive: true });
+    await streamClient.write(file, "original", "utf8");
+
+    const controller = new AbortController();
+    const ws = await streamClient.createWriteStream(file, { highWaterMark: 1, signal: controller.signal });
+    const finishedPromise = withTimeout(finished(ws), "Timed out waiting for aborted writev stream.");
+    const callbacks: Promise<Error | null | undefined>[] = [];
+    ws.cork();
+    for (let i = 0; i < 4; i++) {
+      callbacks.push(
+        new Promise<Error | null | undefined>((resolve) => {
+          ws.write(Buffer.alloc(2 * 1024 * 1024), resolve);
+        }),
+      );
+    }
+    ws.uncork();
+
+    controller.abort();
+
+    await assert.rejects(finishedPromise, { name: "AbortError" });
+    const writeErrors = await withTimeout(Promise.all(callbacks), "Timed out waiting for aborted writev callbacks.");
+    for (const writeError of writeErrors) {
+      assert.ok(writeError instanceof Error);
+      assert.strictEqual(writeError.name, "AbortError");
+    }
+
+    const readData = await streamClient.read(file, "utf8");
+    assert.strictEqual(readData, "original");
+    await streamClient.write(file, "next", "utf8");
+    const nextData = await streamClient.read(file, "utf8");
+    assert.strictEqual(nextData, "next");
+  });
+
+  await test("createWriteStream settles corked backpressured write callbacks when the inner stream closes.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const dir = pth.join(WEB_ROOT, "streams", "backpressure-writev-close");
+    const file = pth.join(dir, "data.txt");
+    await fsp.mkdir(dir, { recursive: true });
+    await streamClient.write(file, "original", "utf8");
+
+    const ws = await streamClient.createWriteStream(file, { highWaterMark: 1 });
+    const finishedPromise = withTimeout(finished(ws), "Timed out waiting for closed writev stream.");
+    const callbacks: Promise<Error | null | undefined>[] = [];
+    ws.cork();
+    for (let i = 0; i < 4; i++) {
+      callbacks.push(
+        new Promise<Error | null | undefined>((resolve) => {
+          ws.write(Buffer.alloc(2 * 1024 * 1024), resolve);
+        }),
+      );
+    }
+    ws.uncork();
+
+    ws.fsWriteStream.close();
+
+    await assert.rejects(finishedPromise, /fsWriteStream closed\./);
+    const writeErrors = await withTimeout(Promise.all(callbacks), "Timed out waiting for closed writev callbacks.");
+    for (const writeError of writeErrors) {
+      assert.ok(writeError instanceof Error);
+      assert.match(writeError.message, /fsWriteStream closed\./);
+    }
+
+    const readData = await streamClient.read(file, "utf8");
+    assert.strictEqual(readData, "original");
+    await streamClient.write(file, "next", "utf8");
+    const nextData = await streamClient.read(file, "utf8");
+    assert.strictEqual(nextData, "next");
+  });
+
   await test("createWriteStream ignores unsupported JS-only options and releases the lock.", async () => {
     const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
     const dir = pth.join(WEB_ROOT, "streams");
@@ -1766,6 +1908,34 @@ await suite("Client (streams)", async () => {
       },
       () => {}
     );
+
+    const readData = await streamClient.read(file, "utf8");
+    assert.strictEqual(readData, JSON.stringify({ v: 1 }));
+
+    await streamClient.write(file, JSON.stringify({ v: 3 }));
+    const nextData = await streamClient.read(file, "utf8");
+    assert.strictEqual(nextData, JSON.stringify({ v: 3 }));
+  });
+
+  await test("createWriteStream preserves the original commit error when temp cleanup fails.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const dir = pth.join(WEB_ROOT, "streams", "cleanup-error");
+    const file = pth.join(dir, "data.json");
+    await fsp.mkdir(dir, { recursive: true });
+    await streamClient.write(file, JSON.stringify({ v: 1 }));
+
+    const ws = await streamClient.createWriteStream(file);
+    const originalRename = mutableFsp.rename;
+    const originalRm = mutableFsp.rm;
+    mutableFsp.rename = () => Promise.reject(new Error("Injected rename failure"));
+    mutableFsp.rm = () => Promise.reject(new Error("Injected cleanup failure"));
+    try {
+      ws.end(JSON.stringify({ v: 2 }));
+      await assert.rejects(withTimeout(finished(ws), "Timed out waiting for commit failure."), /Injected rename failure/);
+    } finally {
+      mutableFsp.rename = originalRename;
+      mutableFsp.rm = originalRm;
+    }
 
     const readData = await streamClient.read(file, "utf8");
     assert.strictEqual(readData, JSON.stringify({ v: 1 }));
