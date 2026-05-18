@@ -4,7 +4,7 @@ Persistence - a filesystem coordination layer.
 
 ## Introduction
 
-Persistence is an in-process filesystem coordination layer for code that routes operations through one shared `LockManager`. It provides hierarchical read/write locking, optional durability (see durability notes below), and atomic-style writes. Reads on the same file are concurrent; however, reads are partitioned by writes and conflicting writes are processed in order of arrival (FIFO). Persistence does not provide OS-level locks or cross-process coordination by itself.
+Persistence is an in-process filesystem coordination layer for code that routes operations through one shared lock manager. It provides hierarchical read/write locking, optional durability (see durability notes below), and atomic-style writes. Reads on the same file are concurrent; however, reads are partitioned by writes and conflicting writes are processed in order of arrival (FIFO). Persistence does not provide OS-level locks or cross-process coordination by itself.
 
 ### Features
 
