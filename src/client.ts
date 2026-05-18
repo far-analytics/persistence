@@ -239,7 +239,7 @@ export class Client {
           await fsp.writeFile(tempPath, data, writeFileOptions);
           await fsp.rename(tempPath, path);
         } catch (err) {
-          await fsp.rm(tempPath, { force: true });
+          await fsp.rm(tempPath, { force: true }).catch(() => {});
           throw err;
         }
         await makePathDurable(dir);
@@ -251,7 +251,7 @@ export class Client {
           await fsp.writeFile(tempPath, data, writeFileOptions);
           await fsp.rename(tempPath, path);
         } catch (err) {
-          await fsp.rm(tempPath, { force: true });
+          await fsp.rm(tempPath, { force: true }).catch(() => {});
           throw err;
         }
       }
@@ -263,6 +263,9 @@ export class Client {
   public async createWriteStream(path: string, options?: ClientCreateWriteStreamOptions | BufferEncoding): Promise<WriteStream> {
     if (!pth.isAbsolute(path)) {
       throw new Error("Path must be absolute.");
+    }
+    if (typeof options !== "string") {
+      options?.signal?.throwIfAborted();
     }
     path = pth.resolve(path);
     const dir = pth.dirname(path);
