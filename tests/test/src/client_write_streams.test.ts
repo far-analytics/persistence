@@ -111,6 +111,26 @@ await suite("Client (write streams)", async () => {
     assert.strictEqual(nextData, JSON.stringify({ v: 2 }));
   });
 
+  await test("createWriteStream rejects a pre-aborted signal and releases the lock.", async () => {
+    const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }) });
+    const dir = pth.join(WEB_ROOT, "streams", "pre-aborted-signal");
+    const file = pth.join(dir, "data.json");
+    await fsp.mkdir(dir, { recursive: true });
+    await streamClient.write(file, JSON.stringify({ v: 1 }));
+
+    const controller = new AbortController();
+    controller.abort();
+
+    await assert.rejects(streamClient.createWriteStream(file, { signal: controller.signal }), { name: "AbortError" });
+
+    const readData = await streamClient.read(file, "utf8");
+    assert.strictEqual(readData, JSON.stringify({ v: 1 }));
+
+    await streamClient.write(file, JSON.stringify({ v: 2 }));
+    const nextData = await streamClient.read(file, "utf8");
+    assert.strictEqual(nextData, JSON.stringify({ v: 2 }));
+  });
+
   await test("Durable createWriteStream abort signal preserves existing data and releases the lock.", async () => {
     const streamClient = new Client({ manager: new LockManager({ errorHandler: () => {} }), durable: true });
     const dir = pth.join(WEB_ROOT, "streams", "durable-abort-signal");
