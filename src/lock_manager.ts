@@ -93,6 +93,9 @@ export class LockManager {
         ancestors = ancestors.concat(artifact.ancestors);
       }
 
+      // Append ancestor descendant tails only after every path has collected
+      // its blockers. Otherwise acquireAll(["/a/b", "/a"]) would make "/a"
+      // wait on its own "/a/b" lock and deadlock.
       ancestors = [...new Set(ancestors)];
       for (const ancestor of ancestors) {
         const tail = ancestor.appendDescendantWriteTail(lock);
@@ -243,6 +246,8 @@ export class LockManager {
       throw new Error("Operation is not supported.");
     }
     let node: GraphNode = this.root;
+    // Keep the parsed root as the first segment. On Windows this preserves
+    // drive roots and UNC share roots as distinct lock scopes.
     const segments = path == root ? [root] : [root, ...path.slice(root.length).split(pth.sep)];
     const last = segments.length - 1;
     for (const [index, segment] of segments.entries()) {
