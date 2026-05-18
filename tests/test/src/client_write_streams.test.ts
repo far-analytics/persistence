@@ -203,7 +203,7 @@ await suite("Client (write streams)", async () => {
       callbacks.push(
         new Promise<Error | null | undefined>((resolve) => {
           ws.write(Buffer.alloc(2 * 1024 * 1024), resolve);
-        }),
+        })
       );
     }
     ws.uncork();
@@ -239,7 +239,7 @@ await suite("Client (write streams)", async () => {
       callbacks.push(
         new Promise<Error | null | undefined>((resolve) => {
           ws.write(Buffer.alloc(2 * 1024 * 1024), resolve);
-        }),
+        })
       );
     }
     ws.uncork();
